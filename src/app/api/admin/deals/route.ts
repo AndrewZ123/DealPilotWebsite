@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/db";
 import slugify from "slugify";
 
 /**
@@ -15,13 +15,7 @@ function isAuthorized(req: NextRequest): boolean {
 
 /**
  * GET /api/admin/deals — List all deals with optional filtering.
- *
- * Query params:
- *   - category: filter by category (e.g. "tech", "home")
- *   - active: filter by active status ("true" or "false")
- *   - limit: max results (default 50, max 200)
- *   - offset: skip N results (default 0)
- *   - search: search title/description (case-insensitive)
+ * Uses admin client (bypasses RLS, sees all deals including inactive).
  */
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
@@ -38,48 +32,32 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
-  const where: Record<string, unknown> = {};
-  if (category) where.category = category;
-  if (active !== null) where.active = active === "true";
-  if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { description: { contains: search } },
-      { store: { contains: search } },
-    ];
-  }
+  let query = supabaseAdmin
+    .from("deals")
+    .select("*", { count: "exact" })
+    .order("createdAt", { ascending: false })
+    .range(offset, offset + limit - 1);
 
-  const [deals, total] = await Promise.all([
-    prisma.deal.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      skip: offset,
-    }),
-    prisma.deal.count({ where }),
-  ]);
+  if (category) query = query.eq("category", category);
+  if (active !== null) query = query.eq("active", active === "true");
+  if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,store.ilike.%${search}%`);
+
+  const { data: deals, count, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     success: true,
-    data: deals,
-    meta: { total, limit, offset, count: deals.length },
+    data: deals ?? [],
+    meta: { total: count ?? 0, limit, offset, count: deals?.length ?? 0 },
   });
 }
 
 /**
  * POST /api/admin/deals — Create a new deal.
- *
- * Body:
- *   - title (required): deal title
- *   - store (required): merchant/store name
- *   - originalPrice (required): original price (number)
- *   - salePrice (required): sale/discounted price (number)
- *   - finalUrl (required): target URL to redirect to
- *   - category (required): one of Tech, Home, Fashion, Toys, Misc
- *   - description (optional): deal description
- *   - imageUrl (optional): product image URL
- *   - active (optional): defaults to true
- *   - slug (optional): auto-generated from title if not provided
+ * Uses admin client (bypasses RLS).
  */
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
@@ -117,7 +95,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate types
   const orig = Number(originalPrice);
   const sale = Number(salePrice);
   if (isNaN(orig) || isNaN(sale)) {
@@ -133,7 +110,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate category
   const validCategories = ["Tech", "Home", "Fashion", "Toys", "Misc"];
   if (!validCategories.includes(String(category))) {
     return NextResponse.json(
@@ -142,7 +118,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate URL
   try {
     new URL(String(finalUrl));
   } catch {
@@ -159,14 +134,16 @@ export async function POST(req: NextRequest) {
     ? slugify(String(customSlug), { lower: true, strict: true })
     : slugify(String(title), { lower: true, strict: true });
 
-  let existing = await prisma.deal.findUnique({ where: { slug } });
+  // Ensure slug is unique
+  let { data: existing } = await supabaseAdmin.from("deals").select("id").eq("slug", slug).single();
   while (existing) {
     slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-    existing = await prisma.deal.findUnique({ where: { slug } });
+    ({ data: existing } = await supabaseAdmin.from("deals").select("id").eq("slug", slug).single());
   }
 
-  const deal = await prisma.deal.create({
-    data: {
+  const { data: deal, error } = await supabaseAdmin
+    .from("deals")
+    .insert({
       slug,
       title: String(title),
       description: String(description || ""),
@@ -178,8 +155,13 @@ export async function POST(req: NextRequest) {
       imageUrl: imageUrl ? String(imageUrl) : "",
       finalUrl: String(finalUrl),
       active: active !== undefined ? Boolean(active) : true,
-    },
-  });
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json(
     {

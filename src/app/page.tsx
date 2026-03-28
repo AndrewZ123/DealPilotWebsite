@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
 import { CATEGORIES } from "@/lib/categories";
@@ -14,39 +14,26 @@ export default async function Home({
   const params = await searchParams;
   const page = Math.max(1, Number(params.page || "1"));
 
-  const [deals, total] = await Promise.all([
-    prisma.deal.findMany({
-      where: { active: true },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        description: true,
-        store: true,
-        originalPrice: true,
-        salePrice: true,
-        discountPercent: true,
-        category: true,
-        imageUrl: true,
-        createdAt: true,
-      },
-    }),
-    prisma.deal.count({ where: { active: true } }),
-  ]);
+  const { data: deals, count: total } = await supabase
+    .from("deals")
+    .select("id, slug, title, description, store, originalPrice, salePrice, discountPercent, category, imageUrl, createdAt", { count: "exact" })
+    .eq("active", true)
+    .order("createdAt", { ascending: false })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const dealList = deals ?? [];
+  const totalCount = total ?? 0;
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   // Compute some stats for the hero
-  const totalSavings = deals.reduce(
+  const totalSavings = dealList.reduce(
     (sum, d) => sum + (d.originalPrice - d.salePrice),
     0
   );
   const avgDiscount =
-    deals.length > 0
-      ? Math.round(deals.reduce((s, d) => s + d.discountPercent, 0) / deals.length)
+    dealList.length > 0
+      ? Math.round(dealList.reduce((s, d) => s + d.discountPercent, 0) / dealList.length)
       : 0;
 
   return (
@@ -66,7 +53,7 @@ export default async function Home({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
               </span>
-              Live — {total} deals updated minutes ago
+              Live — {totalCount} deals updated minutes ago
             </div>
 
             <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -103,7 +90,7 @@ export default async function Home({
           {/* Stats bar */}
           <div className="mt-14 grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-8">
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-3xl font-black text-white">{total}+</div>
+              <div className="text-3xl font-black text-white">{totalCount}+</div>
               <div className="mt-1 text-sm font-medium text-brand-200">Active Deals</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
@@ -168,7 +155,7 @@ export default async function Home({
         {/* Deal grid */}
         <div className="mt-8">
           <DealGrid
-            deals={deals.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
+            deals={dealList.map((d) => ({ ...d, createdAt: new Date(d.createdAt).toISOString() }))}
             emptyMessage="No deals right now — check back soon for fresh discounts!"
           />
         </div>

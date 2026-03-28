@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { getCategoryBySlug, CATEGORIES } from "@/lib/categories";
 import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
@@ -26,24 +26,15 @@ export default async function CategoryPage({ params }: Props) {
   const cat = getCategoryBySlug(slug);
   if (!cat) notFound();
 
-  const deals = await prisma.deal.findMany({
-    where: { active: true, category: cat.name },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      description: true,
-      store: true,
-      originalPrice: true,
-      salePrice: true,
-      discountPercent: true,
-      category: true,
-      imageUrl: true,
-      createdAt: true,
-    },
-  });
+  const { data: deals } = await supabase
+    .from("deals")
+    .select("id, slug, title, description, store, originalPrice, salePrice, discountPercent, category, imageUrl, createdAt")
+    .eq("active", true)
+    .eq("category", cat.name)
+    .order("createdAt", { ascending: false })
+    .limit(30);
+
+  const dealList = deals ?? [];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -76,7 +67,7 @@ export default async function CategoryPage({ params }: Props) {
       </div>
 
       <DealGrid
-        deals={deals.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
+        deals={dealList.map((d) => ({ ...d, createdAt: new Date(d.createdAt).toISOString() }))}
         emptyMessage={`No ${cat.name} deals right now — check back soon!`}
       />
     </div>

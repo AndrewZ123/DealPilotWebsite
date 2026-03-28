@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/db";
 import crypto from "crypto";
 
 function isAuthorized(req: NextRequest): boolean {
@@ -18,89 +18,52 @@ function generateApiKey(): { key: string; prefix: string } {
 
 /**
  * PUT /api/admin/keys/[id] — Update an API key.
- *
- * Body (partial):
- *   name: string (optional)
- *   active: boolean (optional — toggle active/inactive)
  */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
   const { id } = await params;
 
-  const existing = await prisma.apiKey.findUnique({ where: { id } });
+  const { data: existing } = await supabaseAdmin.from("api_keys").select("id").eq("id", id).single();
   if (!existing) {
-    return NextResponse.json(
-      { success: false, error: `API key with id "${id}" not found.` },
-      { status: 404 }
-    );
+    return NextResponse.json({ success: false, error: `API key "${id}" not found.` }, { status: 404 });
   }
 
   let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "Invalid JSON body." },
-      { status: 400 }
-    );
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ success: false, error: "Invalid JSON body." }, { status: 400 });
   }
 
   const updates: Record<string, unknown> = {};
-
   if (body.name !== undefined) {
-    const name = (body.name as string).trim();
-    if (!name) {
-      return NextResponse.json(
-        { success: false, error: "Name cannot be empty." },
-        { status: 400 }
-      );
-    }
-    if (name.length > 100) {
-      return NextResponse.json(
-        { success: false, error: "Name must be 100 characters or less." },
-        { status: 400 }
-      );
-    }
+    const name = String(body.name).trim();
+    if (!name) return NextResponse.json({ success: false, error: "Name cannot be empty." }, { status: 400 });
+    if (name.length > 100) return NextResponse.json({ success: false, error: "Name too long." }, { status: 400 });
     updates.name = name;
   }
-
-  if (body.active !== undefined) {
-    updates.active = Boolean(body.active);
-  }
-
+  if (body.active !== undefined) updates.active = Boolean(body.active);
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json(
-      { success: false, error: "No valid fields to update. Send 'name' and/or 'active'." },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: "No valid fields." }, { status: 400 });
   }
 
-  const updated = await prisma.apiKey.update({
-    where: { id },
-    data: updates,
-  });
+  const { data: updated, error } = await supabaseAdmin
+    .from("api_keys")
+    .update(updates)
+    .eq("id", id)
+    .select("id, name, prefix, active, lastUsedAt, createdAt, updatedAt")
+    .single();
+
+  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({
     success: true,
-    data: {
-      id: updated.id,
-      name: updated.name,
-      prefix: updated.prefix,
-      active: updated.active,
-      lastUsedAt: updated.lastUsedAt,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    },
-    message: `API key "${updated.name}" updated successfully.`,
+    data: updated,
+    message: `API key "${updated.name}" updated.`,
   });
 }
 
@@ -112,76 +75,56 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
   const { id } = await params;
 
-  const existing = await prisma.apiKey.findUnique({ where: { id } });
+  const { data: existing } = await supabaseAdmin.from("api_keys").select("name, prefix").eq("id", id).single();
   if (!existing) {
-    return NextResponse.json(
-      { success: false, error: `API key with id "${id}" not found.` },
-      { status: 404 }
-    );
+    return NextResponse.json({ success: false, error: `API key "${id}" not found.` }, { status: 404 });
   }
 
-  await prisma.apiKey.delete({ where: { id } });
+  await supabaseAdmin.from("api_keys").delete().eq("id", id);
 
   return NextResponse.json({
     success: true,
-    message: `API key "${existing.name}" (${existing.prefix}...) deleted permanently.`,
+    message: `API key "${existing.name}" (${existing.prefix}...) deleted.`,
   });
 }
 
 /**
  * POST /api/admin/keys/[id] — Regenerate an API key.
- *
- * Generates a new key value for this key record. The old key immediately stops working.
- * Returns the new full key — it won't be shown again.
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
   const { id } = await params;
 
-  const existing = await prisma.apiKey.findUnique({ where: { id } });
+  const { data: existing } = await supabaseAdmin.from("api_keys").select("id").eq("id", id).single();
   if (!existing) {
-    return NextResponse.json(
-      { success: false, error: `API key with id "${id}" not found.` },
-      { status: 404 }
-    );
+    return NextResponse.json({ success: false, error: `API key "${id}" not found.` }, { status: 404 });
   }
 
   const { key, prefix } = generateApiKey();
 
-  const updated = await prisma.apiKey.update({
-    where: { id },
-    data: { key, prefix },
-  });
+  const { data: updated, error } = await supabaseAdmin
+    .from("api_keys")
+    .update({ key, prefix })
+    .eq("id", id)
+    .select("id, name, prefix, active, createdAt, updatedAt")
+    .single();
+
+  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({
     success: true,
-    data: {
-      id: updated.id,
-      name: updated.name,
-      prefix: updated.prefix,
-      active: updated.active,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-      // ⚠️ Full new key — show to the user NOW. Cannot be retrieved again.
-      key,
-    },
-    message: `API key "${updated.name}" regenerated. Save the new key now — it won't be shown again.`,
+    data: { ...updated, key },
+    message: `API key "${updated.name}" regenerated. Save the new key now.`,
   });
 }

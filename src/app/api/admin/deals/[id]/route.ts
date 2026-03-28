@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/db";
 
 function isAuthorized(req: NextRequest): boolean {
   const token = process.env.ADMIN_TOKEN;
@@ -17,15 +17,20 @@ export async function GET(
 ) {
   if (!isAuthorized(req)) {
     return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
+      { success: false, error: "Unauthorized." },
       { status: 401 }
     );
   }
 
   const { id } = await params;
 
-  const deal = await prisma.deal.findUnique({ where: { id } });
-  if (!deal) {
+  const { data: deal, error } = await supabaseAdmin
+    .from("deals")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !deal) {
     return NextResponse.json(
       { success: false, error: `Deal with id "${id}" not found.` },
       { status: 404 }
@@ -37,26 +42,24 @@ export async function GET(
 
 /**
  * PUT /api/admin/deals/[id] — Update a deal.
- *
- * Body (all optional — only included fields are updated):
- *   - title, description, store, originalPrice, salePrice,
- *     category, imageUrl, finalUrl, active, slug
  */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
   const { id } = await params;
 
   // Verify deal exists
-  const existing = await prisma.deal.findUnique({ where: { id } });
+  const { data: existing } = await supabaseAdmin
+    .from("deals")
+    .select("*")
+    .eq("id", id)
+    .single();
+
   if (!existing) {
     return NextResponse.json(
       { success: false, error: `Deal with id "${id}" not found.` },
@@ -68,10 +71,7 @@ export async function PUT(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { success: false, error: "Invalid JSON body." },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: "Invalid JSON body." }, { status: 400 });
   }
 
   const data: Record<string, unknown> = {};
@@ -84,7 +84,7 @@ export async function PUT(
     const validCategories = ["Tech", "Home", "Fashion", "Toys", "Misc"];
     if (!validCategories.includes(String(body.category))) {
       return NextResponse.json(
-        { success: false, error: `Invalid category "${body.category}". Must be one of: ${validCategories.join(", ")}` },
+        { success: false, error: `Invalid category "${body.category}".` },
         { status: 400 }
       );
     }
@@ -92,11 +92,9 @@ export async function PUT(
   }
   if (body.imageUrl !== undefined) data.imageUrl = String(body.imageUrl);
   if (body.finalUrl !== undefined) {
-    try {
-      new URL(String(body.finalUrl));
-    } catch {
+    try { new URL(String(body.finalUrl)); } catch {
       return NextResponse.json(
-        { success: false, error: `Invalid finalUrl: "${body.finalUrl}". Must be a valid HTTP(S) URL.` },
+        { success: false, error: `Invalid finalUrl: "${body.finalUrl}".` },
         { status: 400 }
       );
     }
@@ -105,21 +103,27 @@ export async function PUT(
   if (body.active !== undefined) data.active = Boolean(body.active);
   if (body.slug !== undefined) data.slug = String(body.slug);
 
-  // Recalculate discount if prices changed
+  // Recalculate discount
   const orig = Number(data.originalPrice ?? existing.originalPrice);
   const sale = Number(data.salePrice ?? existing.salePrice);
   if (sale > orig) {
     return NextResponse.json(
-      { success: false, error: `salePrice ($${sale}) cannot be greater than originalPrice ($${orig}).` },
+      { success: false, error: `salePrice ($${sale}) cannot exceed originalPrice ($${orig}).` },
       { status: 400 }
     );
   }
   data.discountPercent = Math.round((1 - sale / orig) * 100);
 
-  const deal = await prisma.deal.update({
-    where: { id },
-    data,
-  });
+  const { data: deal, error } = await supabaseAdmin
+    .from("deals")
+    .update(data)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     success: true,
@@ -136,16 +140,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
   const { id } = await params;
 
-  // Verify deal exists
-  const existing = await prisma.deal.findUnique({ where: { id } });
+  const { data: existing } = await supabaseAdmin
+    .from("deals")
+    .select("title")
+    .eq("id", id)
+    .single();
+
   if (!existing) {
     return NextResponse.json(
       { success: false, error: `Deal with id "${id}" not found.` },
@@ -153,7 +158,11 @@ export async function DELETE(
     );
   }
 
-  await prisma.deal.delete({ where: { id } });
+  const { error } = await supabaseAdmin.from("deals").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     success: true,

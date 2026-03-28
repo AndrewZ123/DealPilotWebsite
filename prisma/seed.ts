@@ -1,16 +1,24 @@
 /**
- * Seed script — populates the database with realistic sample deals.
+ * Seed script — populates Supabase with realistic sample deals.
  *
  * Run with:  npx tsx prisma/seed.ts
  *
+ * Requires SUPABASE_URL and SUPABASE_SERVICE_KEY in .env or environment.
  * This inserts a curated set of deals across multiple categories so the site
- * looks active immediately after first deployment. Existing deals are NOT
- * overwritten (upsert by slug).
+ * looks active immediately after first deployment. Existing slugs are skipped.
  */
 
-import { PrismaClient } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 
-const prisma = new PrismaClient();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("❌ Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_KEY env vars.");
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface SeedDeal {
   slug: string;
@@ -221,24 +229,39 @@ const deals: SeedDeal[] = [
 ];
 
 async function main() {
-  console.log("🌱 Seeding deals…");
+  console.log("🌱 Seeding deals into Supabase…");
+
+  let seeded = 0;
+  let skipped = 0;
 
   for (const deal of deals) {
-    await prisma.deal.upsert({
-      where: { slug: deal.slug },
-      update: {},
-      create: deal,
-    });
+    // Check if slug already exists
+    const { data: existing } = await supabase
+      .from("deals")
+      .select("id")
+      .eq("slug", deal.slug)
+      .single();
+
+    if (existing) {
+      console.log(`  ⏭  Skipping "${deal.slug}" (already exists)`);
+      skipped++;
+      continue;
+    }
+
+    const { error } = await supabase.from("deals").insert(deal);
+
+    if (error) {
+      console.error(`  ❌ Error inserting "${deal.slug}":`, error.message);
+    } else {
+      console.log(`  ✅ Inserted "${deal.slug}"`);
+      seeded++;
+    }
   }
 
-  console.log(`✅ Seeded ${deals.length} deals.`);
+  console.log(`\n✅ Done! Seeded ${seeded} deals, skipped ${skipped}.`);
 }
 
-main()
-  .catch((e) => {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => {
+  console.error("❌ Seed failed:", e);
+  process.exit(1);
+});

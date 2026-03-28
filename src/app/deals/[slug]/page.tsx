@@ -1,13 +1,18 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import { notFound } from "next/navigation";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const deal = await prisma.deal.findUnique({ where: { slug, active: true } });
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("slug", slug)
+    .eq("active", true)
+    .single();
   if (!deal) return { title: "Deal Not Found" };
 
   return {
@@ -24,34 +29,34 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function DealDetailPage({ params }: Props) {
   const { slug } = await params;
-  const deal = await prisma.deal.findUnique({ where: { slug, active: true } });
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("slug", slug)
+    .eq("active", true)
+    .single();
 
   if (!deal) notFound();
 
   const savings = deal.originalPrice - deal.salePrice;
   const isHotDeal = deal.discountPercent >= 40;
-  const postedDate = deal.createdAt.toLocaleDateString("en-US", {
+  const postedDate = new Date(deal.createdAt).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
   });
 
   // Get a few related deals from the same category
-  const related = await prisma.deal.findMany({
-    where: { category: deal.category, active: true, id: { not: deal.id } },
-    orderBy: { createdAt: "desc" },
-    take: 3,
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      salePrice: true,
-      originalPrice: true,
-      discountPercent: true,
-      imageUrl: true,
-      store: true,
-    },
-  });
+  const { data: relatedData } = await supabase
+    .from("deals")
+    .select("id, slug, title, salePrice, originalPrice, discountPercent, imageUrl, store")
+    .eq("category", deal.category)
+    .eq("active", true)
+    .neq("id", deal.id)
+    .order("createdAt", { ascending: false })
+    .limit(3);
+
+  const related = relatedData ?? [];
 
   return (
     <div className="bg-gray-50 min-h-screen">

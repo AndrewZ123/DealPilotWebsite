@@ -1,5 +1,5 @@
 import { MetadataRoute } from "next";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dealpilot.com";
 
@@ -21,14 +21,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  // Deal pages
-  const deals = await prisma.deal.findMany({
-    where: { active: true },
-    select: { slug: true, updatedAt: true },
-  });
-  const dealPages: MetadataRoute.Sitemap = deals.map((deal) => ({
+  // Deal pages — fetch active deals from Supabase
+  const { data: deals } = await supabase
+    .from("deals")
+    .select("slug, updatedAt")
+    .eq("active", true);
+
+  const dealPages: MetadataRoute.Sitemap = (deals ?? []).map((deal) => ({
     url: `${SITE_URL}/deals/${deal.slug}`,
-    lastModified: deal.updatedAt,
+    lastModified: new Date(deal.updatedAt),
     changeFrequency: "daily" as const,
     priority: 0.6,
   }));

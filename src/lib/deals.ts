@@ -13,8 +13,7 @@
 // 3. Server crontab:
 //    0 */6 * * * curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://yourdomain.com/api/refresh-deals
 
-import { prisma } from "./db";
-import { CATEGORIES } from "./categories";
+import { supabaseAdmin } from "./db";
 import slugify from "slugify";
 
 // --- Mock data pools for generating varied deals ---
@@ -106,7 +105,7 @@ function randomDiscount(): number {
 }
 
 /**
- * Generate and insert N new mock deals into the database.
+ * Generate and insert N new mock deals into Supabase.
  * Deals that already exist (by slug) are skipped.
  */
 export async function generateDeals(count: number = 5): Promise<number> {
@@ -124,26 +123,24 @@ export async function generateDeals(count: number = 5): Promise<number> {
     const suffix = randInt(100, 9999);
     const slug = slugify(`${product.name}-${suffix}`, { lower: true, strict: true });
 
-    try {
-      await prisma.deal.create({
-        data: {
-          slug,
-          title: product.name,
-          description,
-          store: product.store,
-          originalPrice: product.base,
-          salePrice,
-          discountPercent: discount,
-          category: product.cat,
-          imageUrl: `https://placehold.co/600x400/1e40af/ffffff?text=${encodeURIComponent(product.name.split(" ").slice(0, 2).join("+"))}`,
-          finalUrl: `${domain}/search?q=${encodeURIComponent(product.name)}`,
-          active: true,
-        },
-      });
+    const { error } = await supabaseAdmin.from("deals").insert({
+      slug,
+      title: product.name,
+      description,
+      store: product.store,
+      originalPrice: product.base,
+      salePrice,
+      discountPercent: discount,
+      category: product.cat,
+      imageUrl: `https://placehold.co/600x400/1e40af/ffffff?text=${encodeURIComponent(product.name.split(" ").slice(0, 2).join("+"))}`,
+      finalUrl: `${domain}/search?q=${encodeURIComponent(product.name)}`,
+      active: true,
+    });
+
+    if (!error) {
       created++;
-    } catch {
-      // Unique constraint violation — slug exists, skip silently
     }
+    // If error (e.g. unique constraint), skip silently
   }
 
   return created;
@@ -157,13 +154,17 @@ export async function archiveOldDeals(olderThanDays: number = 30): Promise<numbe
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - olderThanDays);
 
-  const result = await prisma.deal.updateMany({
-    where: {
-      active: true,
-      createdAt: { lt: cutoff },
-    },
-    data: { active: false },
-  });
+  const { data, error } = await supabaseAdmin
+    .from("deals")
+    .update({ active: false })
+    .eq("active", true)
+    .lt("createdAt", cutoff.toISOString())
+    .select("id");
 
-  return result.count;
+  if (error) {
+    console.error("Error archiving old deals:", error.message);
+    return 0;
+  }
+
+  return data?.length ?? 0;
 }
