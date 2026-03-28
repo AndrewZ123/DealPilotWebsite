@@ -1,25 +1,3 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/admin/deals/new/page": "app/admin/deals/new/page.js",
-  "/admin/keys/page": "app/admin/keys/page.js",
-  "/admin/api-docs/page": "app/admin/api-docs/page.js",
-  "/api/admin/deals/[id]/route": "app/api/admin/deals/[id]/route.js",
-  "/admin/page": "app/admin/page.js",
-  "/api/admin/deals/route": "app/api/admin/deals/route.js",
-  "/api/admin/keys/route": "app/api/admin/keys/route.js",
-  "/api/admin/keys/[id]/route": "app/api/admin/keys/[id]/route.js",
-  "/api/admin/deals/batch/route": "app/api/admin/deals/batch/route.js",
-  "/api/deals/[slug]/route": "app/api/deals/[slug]/route.js",
-  "/api/admin/stats/route": "app/api/admin/stats/route.js",
-  "/api/deals/route": "app/api/deals/route.js",
-  "/api/refresh-deals/route": "app/api/refresh-deals/route.js",
-  "/deals/[slug]/page": "app/deals/[slug]/page.js",
-  "/go/[slug]/route": "app/go/[slug]/route.js",
-  "/page": "app/page.js",
-  "/sitemap.xml/route": "app/sitemap.xml/route.js",
-  "/robots.txt/route": "app/robots.txt/route.js",
-  "/about/page": "app/about/page.js",
-  "/disclosure/page": "app/disclosure/page.js",
-  "/contact/page": "app/contact/page.js",
-  "/category/[slug]/page": "app/category/[slug]/page.js"
+  "/page": "app/page.js"
 }
