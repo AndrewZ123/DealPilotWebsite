@@ -1,186 +1,125 @@
-# DealPilot
+# DealPilot — Affiliate Deal Site
 
-A curated deal-aggregation site built with **Next.js 14**, **TypeScript**, **TailwindCSS**, and **Prisma + SQLite**. Designed to look like a legitimate, active deal site with affiliate tracking, auto-generated deals, and FTC-compliant disclosures.
-
----
+A modern, production-ready affiliate deals website built with **Next.js 14**, **TailwindCSS**, and **Supabase**.
 
 ## Quick Start
 
-### 1. Install dependencies
-
 ```bash
+# Install dependencies
 npm install
-```
 
-### 2. Set up environment
-
-Copy the example env file and edit if needed:
-
-```bash
+# Copy environment variables
 cp .env.example .env
-```
+# Then edit .env with your Supabase credentials
 
-The defaults work out of the box for local development:
-
-```
-DATABASE_URL="file:./dev.db"
-ADMIN_TOKEN="change-me-in-production"
-NEXT_PUBLIC_SITE_URL="http://localhost:3000"
-```
-
-### 3. Set up the database
-
-Run migrations and seed with sample deals:
-
-```bash
-npx prisma migrate dev --name init
-npx prisma db seed
-```
-
-### 4. Start the dev server
-
-```bash
+# Run development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — the site should show a grid of sample deals.
+Visit `http://localhost:3000`.
 
----
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key (public) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (secret — server-side only) |
+| `ADMIN_TOKEN` | Secret token for admin routes |
+| `NEXT_PUBLIC_SITE_URL` | Public site URL (e.g. `https://dealpilot.com`) |
+
+## Database Setup
+
+1. Go to your **Supabase Dashboard** → **SQL Editor**
+2. Copy and run the contents of `supabase/migration.sql`
+3. Seed with sample deals:
+   ```bash
+   npm run db:seed
+   ```
+
+## Deploy to Vercel
+
+### Option A: One-click deploy with Vercel CLI
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+
+# Set environment variables (do this in Vercel dashboard or CLI)
+vercel env add NEXT_PUBLIC_SUPABASE_URL
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
+vercel env add SUPABASE_SERVICE_ROLE_KEY
+vercel env add ADMIN_TOKEN
+vercel env add NEXT_PUBLIC_SITE_URL
+
+# Redeploy with env vars
+vercel --prod
+```
+
+### Option B: Deploy via GitHub
+
+1. Push this repo to GitHub
+2. Go to [vercel.com/new](https://vercel.com/new)
+3. Import the repo
+4. Add all environment variables listed above
+5. Click **Deploy**
+
+### Cron Jobs (Auto-refresh deals)
+
+The `vercel.json` includes a cron that calls `/api/refresh-deals` every 6 hours to keep deals fresh. This works automatically on Vercel Pro. On the Hobby plan, you can trigger it manually:
+
+```bash
+curl https://your-domain.com/api/refresh-deals
+```
+
+Or set up a free external cron (e.g., [cron-job.org](https://cron-job.org)) to hit that URL.
 
 ## Project Structure
 
 ```
-├── prisma/
-│   ├── schema.prisma        # Database schema (Deal, ClickLog)
-│   └── seed.ts              # Seed script — inserts realistic sample deals
-├── src/
-│   ├── app/
-│   │   ├── page.tsx                  # Home — Latest Deals grid
-│   │   ├── layout.tsx                # Root layout (Header, Footer)
-│   │   ├── globals.css               # Tailwind base styles
-│   │   ├── deals/[slug]/page.tsx     # Deal detail page
-│   │   ├── category/[slug]/page.tsx  # Category filtered view
-│   │   ├── about/page.tsx            # About page
-│   │   ├── disclosure/page.tsx       # Affiliate Disclosure page
-│   │   ├── contact/page.tsx          # Contact page
-│   │   ├── admin/
-│   │   │   ├── page.tsx              # Admin deal dashboard
-│   │   │   └── deals/new/page.tsx    # Create new deal form
-│   │   ├── go/[slug]/route.ts        # Redirect tracker (302 → merchant)
-│   │   ├── api/
-│   │   │   ├── deals/route.ts        # GET public deals
-│   │   │   ├── deals/[slug]/route.ts # GET single deal
-│   │   │   ├── admin/deals/route.ts  # POST create deal
-│   │   │   ├── admin/deals/[id]/route.ts  # PUT/DELETE deal
-│   │   │   └── refresh-deals/route.ts     # Auto-generate deals
-│   │   ├── sitemap.ts                # Dynamic sitemap
-│   │   └── robots.ts                 # robots.txt
-│   ├── components/                   # Reusable UI components
-│   ├── lib/                          # Database, helpers, types
-│   └── types/                        # TypeScript type definitions
-├── package.json
-├── tailwind.config.ts
-├── next.config.ts
-└── README.md
+src/
+├── app/
+│   ├── page.tsx                    # Home — Latest Deals
+│   ├── layout.tsx                  # Root layout (nav, footer)
+│   ├── deals/[slug]/page.tsx       # Deal detail page
+│   ├── category/[slug]/page.tsx    # Category filtered view
+│   ├── about/page.tsx              # About page
+│   ├── disclosure/page.tsx         # Affiliate Disclosure
+│   ├── contact/page.tsx            # Contact page
+│   ├── admin/                      # Admin dashboard (token-protected)
+│   ├── go/[slug]/route.ts          # Redirect tracker
+│   ├── api/                        # API routes (deals CRUD, refresh)
+│   ├── sitemap.ts                  # Dynamic sitemap
+│   └── robots.ts                   # robots.txt
+├── components/                     # Shared UI components
+├── lib/                            # Database, helpers, categories
+└── types/                          # TypeScript types
 ```
 
----
+## Adding Real Affiliate IDs
 
-## Key Features
-
-### Public Pages
-- **Home** — paginated grid of latest deals with hero section and disclosure banner
-- **Deal Detail** (`/deals/[slug]`) — full deal info, pricing, "Go to Deal" CTA, OG tags
-- **Category** (`/category/[slug]`) — filtered deals by category (Tech, Home, Fashion, Toys, Misc)
-- **About** — trust-building content about DealPilot
-- **Affiliate Disclosure** — full FTC-style disclosure page
-- **Contact** — email links + simple contact form
-
-### Admin Interface
-- **Dashboard** (`/admin`) — list all deals, archive/activate/delete
-- **Create Deal** (`/admin/deals/new`) — full deal creation form
-- Protected by simple bearer token (set via `ADMIN_TOKEN` env var)
-
-### Redirect System
-- All outbound links go through `/go/[slug]`
-- Increments click count in the database
-- 302 redirects to the merchant URL
-- **To add real affiliate IDs later**, edit `src/lib/redirect.ts`
-
-### Auto-Deal Generation
-- `/api/refresh-deals` generates 3–8 new realistic mock deals
-- Archives deals older than 30 days
-- Can be called via cron:
-
-**Vercel Cron** (add to `vercel.json`):
-```json
-{ "crons": [{ "path": "/api/refresh-deals", "schedule": "0 */6 * * *" }] }
-```
-
-**Server crontab:**
-```bash
-0 */6 * * * curl -s -H "Authorization: Bearer YOUR_TOKEN" https://yourdomain.com/api/refresh-deals
-```
-
----
-
-## How to Customize the Redirector for Real Affiliate IDs
-
-Edit `src/lib/redirect.ts`. The `buildAffiliateUrl` function is where you inject network-specific parameters:
+Edit `src/lib/redirect.ts`. The `buildAffiliateUrl()` function shows where to inject affiliate parameters per network:
 
 ```typescript
 // Example: Amazon Associates
-if (url.includes("amazon.com")) {
-  url.searchParams.set("tag", "your-amazon-tag-20");
+if (finalUrl.includes('amazon.com')) {
+  url.searchParams.set('tag', 'your-amazon-tag-20');
 }
-
-// Example: CJ Affiliate
-if (url.href.includes("cj.com") || store === "SomeCJMerchant") {
-  url.href = `https://www.anrdoezrs.net/links/${SID}/type/dlg/${encodeURIComponent(url.href)}`;
-}
-
-// Example: Impact Radius
-if (store === "ImpactMerchant") {
-  url.searchParams.set("subId1", "dealpilot");
-  url.href = `https://your-brand.sjv.io/${AFFID}?u=${encodeURIComponent(url.href)}`;
-}
+// Example: CJ / Impact Radius
+url.searchParams.set('affid', 'YOUR_AFFILIATE_ID');
 ```
 
-Each network has its own link format — you can add them one at a time as you get approved.
+## Admin Access
 
----
-
-## Deployment
-
-### Vercel (recommended)
-1. Push to GitHub
-2. Connect repo to Vercel
-3. Set env vars: `DATABASE_URL`, `ADMIN_TOKEN`, `NEXT_PUBLIC_SITE_URL`
-4. Deploy — Vercel runs `prisma migrate deploy` automatically if configured
-5. Add Vercel Cron for auto-refresh (see `vercel.json` note above)
-
-### Any Node.js host
-```bash
-npm run build
-npm start
-```
-
-Make sure to run `npx prisma migrate deploy` before starting the app.
-
----
-
-## Tech Stack
-
-| Layer      | Technology              |
-|------------|-------------------------|
-| Framework  | Next.js 14 (App Router) |
-| Language   | TypeScript              |
-| Styling    | TailwindCSS             |
-| Database   | SQLite via Prisma ORM   |
-| Deployment | Vercel / any Node host  |
-
----
+- **Dashboard:** `/admin`
+- **Create Deal:** `/admin/deals/new`
+- **API Keys:** `/admin/keys`
+- **API Docs:** `/admin/api-docs`
+- Auth: Pass `Authorization: Bearer <ADMIN_TOKEN>` header, or use the web UI with the token.
 
 ## License
 
-Private project. All rights reserved.
+Private — All rights reserved.
