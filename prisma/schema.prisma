@@ -1,0 +1,61 @@
+// DealPilot — Prisma schema for SQLite
+// Models: Deal, ClickLog, ApiKey
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A single deal listing shown on the site.
+model Deal {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  description     String
+  store           String
+  originalPrice   Float
+  salePrice       Float
+  discountPercent Int
+  category        String
+  imageUrl        String   @default("")
+  /// The final merchant URL that /go/[slug] redirects to.
+  finalUrl        String
+  clicks          Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clickLogs ClickLog[]
+}
+
+/// Tracks every click through the /go/[slug] redirect for analytics.
+model ClickLog {
+  id        String   @id @default(cuid())
+  dealId    String
+  referer   String   @default("")
+  userAgent String   @default("")
+  ip        String   @default("")
+  createdAt DateTime @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
+}
+
+/// API keys for programmatic access to admin endpoints.
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  /// The full API key (shown only once at creation).
+  key         String    @unique
+  /// First 8 chars for display purposes.
+  prefix      String
+  active      Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
