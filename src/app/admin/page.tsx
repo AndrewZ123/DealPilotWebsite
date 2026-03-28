@@ -46,12 +46,16 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/deals", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Unauthorized");
       const data = await res.json();
+      if (!res.ok) {
+        // Show the actual error from the API (auth error, DB error, etc.)
+        throw new Error(data.error || `Error ${res.status}`);
+      }
       setDeals(data.data);
-    } catch {
+    } catch (err: unknown) {
       sessionStorage.removeItem("admin_token");
-      setError("Authentication failed. Please reload and try again.");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message + " — Click reload to try again.");
     } finally {
       setLoading(false);
     }
