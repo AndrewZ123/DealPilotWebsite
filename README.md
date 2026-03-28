@@ -69,13 +69,13 @@ vercel --prod
 
 ### Cron Jobs (Auto-refresh deals)
 
-The `vercel.json` includes a cron that calls `/api/refresh-deals` every 6 hours to keep deals fresh. This works automatically on Vercel Pro. On the Hobby plan, you can trigger it manually:
+The `vercel.json` includes a cron that calls `/api/refresh-deals` once daily at 6:00 AM UTC. This works on Vercel's Hobby plan.
+
+For more frequent refreshes, set up a free external cron at [cron-job.org](https://cron-job.org) pointing to `https://your-domain.com/api/refresh-deals` (e.g., every 6 hours). You can also trigger it manually anytime:
 
 ```bash
 curl https://your-domain.com/api/refresh-deals
 ```
-
-Or set up a free external cron (e.g., [cron-job.org](https://cron-job.org)) to hit that URL.
 
 ## Project Structure
 
