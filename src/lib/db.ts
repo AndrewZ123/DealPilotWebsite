@@ -36,13 +36,20 @@ const globalForAdmin = globalThis as unknown as {
   supabaseAdmin: SupabaseClient | undefined;
 };
 
+if (!supabaseServiceKey && typeof window === "undefined") {
+  console.warn(
+    "⚠️ SUPABASE_SERVICE_ROLE_KEY is not set. Admin operations will fail. " +
+    "Add it to your .env or Vercel environment variables."
+  );
+}
+
 export const supabaseAdmin =
   globalForAdmin.supabaseAdmin ??
   (supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
-    : supabase); // fallback to public client if no service key
+    : supabase); // fallback to public client if no service key (will fail on admin ops due to RLS)
 
 if (process.env.NODE_ENV !== "production") {
   globalForAdmin.supabaseAdmin = supabaseAdmin;
