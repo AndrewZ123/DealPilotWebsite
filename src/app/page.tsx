@@ -29,16 +29,6 @@ export default async function Home({
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Compute some stats for the hero
-  const totalSavings = dealList.reduce(
-    (sum, d) => sum + (d.originalPrice - d.salePrice),
-    0
-  );
-  const avgDiscount =
-    dealList.length > 0
-      ? Math.round(dealList.reduce((s, d) => s + d.discountPercent, 0) / dealList.length)
-      : 0;
-
   return (
     <div>
       {/* ─── HERO ─── */}
@@ -90,23 +80,27 @@ export default async function Home({
             </div>
           </div>
 
-          {/* Stats bar */}
+          {/* Trust badges */}
           <div className="mt-14 grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-8">
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-3xl font-black text-white">{totalCount}+</div>
-              <div className="mt-1 text-sm font-medium text-brand-200">Active Deals</div>
+              <div className="text-2xl mb-1">✅</div>
+              <div className="text-sm font-bold text-white">Verified Deals</div>
+              <div className="mt-0.5 text-xs text-brand-200/70">Every deal hand-checked</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-3xl font-black text-white">{avgDiscount}%</div>
-              <div className="mt-1 text-sm font-medium text-brand-200">Avg. Discount</div>
+              <div className="text-2xl mb-1">🔄</div>
+              <div className="text-sm font-bold text-white">Updated Daily</div>
+              <div className="mt-0.5 text-xs text-brand-200/70">Fresh offers every day</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-3xl font-black text-white">${totalSavings > 1000 ? Math.round(totalSavings / 100) * 100 : Math.round(totalSavings)}</div>
-              <div className="mt-1 text-sm font-medium text-brand-200">Total Savings</div>
+              <div className="text-2xl mb-1">🏪</div>
+              <div className="text-sm font-bold text-white">Top Retailers</div>
+              <div className="mt-0.5 text-xs text-brand-200/70">Amazon, Best Buy & more</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-3xl font-black text-white">24/7</div>
-              <div className="mt-1 text-sm font-medium text-brand-200">Price Tracking</div>
+              <div className="text-2xl mb-1">🆓</div>
+              <div className="text-sm font-bold text-white">100% Free</div>
+              <div className="mt-0.5 text-xs text-brand-200/70">No sign-up required</div>
             </div>
           </div>
         </div>
