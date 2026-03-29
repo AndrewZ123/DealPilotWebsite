@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateDeals, archiveOldDeals } from "@/lib/deals";
 import { isAuthorized } from "@/lib/auth";
+import { revalidateAllDeals } from "@/lib/revalidation";
 
 // POST /api/refresh-deals — auto-populate new deals and archive old ones.
 //
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
     generateDeals(count),
     archiveOldDeals(expire),
   ]);
+
+  // Purge all cached deal pages so new/archived deals show up immediately
+  revalidateAllDeals();
 
   return NextResponse.json({
     message: "Refresh complete",

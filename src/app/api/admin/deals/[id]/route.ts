@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
+import { revalidateDeal, revalidateAllDeals } from "@/lib/revalidation";
 
 /**
  * GET /api/admin/deals/[id] — Get a single deal by ID.
@@ -119,6 +120,9 @@ export async function PUT(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 
+  // Purge cached pages so the updated deal appears on the public site immediately
+  revalidateDeal(deal.slug, deal.category);
+
   return NextResponse.json({
     success: true,
     data: deal,
@@ -157,6 +161,9 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+
+  // Purge all cached deal pages so the removed deal disappears from the public site
+  revalidateAllDeals();
 
   return NextResponse.json({
     success: true,

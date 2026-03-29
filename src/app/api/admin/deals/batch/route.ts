@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
+import { revalidateAllDeals } from "@/lib/revalidation";
 import slugify from "slugify";
 
 const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
@@ -105,6 +106,11 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       errors.push({ index: i, error: err instanceof Error ? err.message : "Unknown error", deal: d });
     }
+  }
+
+  // Purge all cached deal pages so new deals appear on the public site immediately
+  if (created.length > 0) {
+    revalidateAllDeals();
   }
 
   return NextResponse.json(
