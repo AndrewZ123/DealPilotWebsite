@@ -5,6 +5,9 @@ import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
 import { notFound } from "next/navigation";
 
+// Always render fresh — ensures deals appear instantly after admin changes
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -15,10 +18,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: `${cat.name} Deals`,
     description: `Browse the latest ${cat.name.toLowerCase()} deals curated by DealPilot. Save big on ${cat.name.toLowerCase()} products from top retailers.`,
   };
-}
-
-export function generateStaticParams() {
-  return CATEGORIES.map((cat) => ({ slug: cat.slug }));
 }
 
 export default async function CategoryPage({ params }: Props) {

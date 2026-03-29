@@ -4,6 +4,9 @@ import DisclosureBanner from "@/components/DisclosureBanner";
 import { CATEGORIES } from "@/lib/categories";
 import Link from "next/link";
 
+// Always render fresh — ensures deals appear instantly after admin changes
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 18;
 
 export default async function Home({

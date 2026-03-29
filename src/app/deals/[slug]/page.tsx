@@ -3,6 +3,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/db";
 import { notFound } from "next/navigation";
 
+// Always render fresh — ensures deals appear instantly after admin changes
+export const dynamic = "force-dynamic";
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
