@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateDeals, archiveOldDeals } from "@/lib/deals";
+import { isAuthorized } from "@/lib/auth";
 
 // POST /api/refresh-deals — auto-populate new deals and archive old ones.
 //
-// Requires admin token. Can be called by cron or manually.
+// Requires admin token or API key. Can be called by cron or manually.
 //
 // Query params:
 //   count  — number of new deals to generate (default 5, max 20)
@@ -17,9 +18,7 @@ import { generateDeals, archiveOldDeals } from "@/lib/deals";
 // Server crontab (runs every 6 hours):
 //   0 */6 * * * curl -X POST -H "Authorization: Bearer YOUR_TOKEN" https://yourdomain.com/api/refresh-deals
 export async function POST(req: NextRequest) {
-  const token = process.env.ADMIN_TOKEN;
-  const auth = req.headers.get("authorization") || "";
-  if (!token || auth !== `Bearer ${token}`) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

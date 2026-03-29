@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 /**
  * GET /api/admin/deals/[id] — Get a single deal by ID.
@@ -15,7 +9,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized." },
       { status: 401 }
@@ -47,7 +41,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
@@ -139,7 +133,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 

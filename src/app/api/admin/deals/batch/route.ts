@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
+import { isAuthorized } from "@/lib/auth";
 import slugify from "slugify";
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
 
 const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
 
@@ -15,7 +9,7 @@ const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
  * POST /api/admin/deals/batch — Create multiple deals at once.
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 

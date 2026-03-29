@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
+import { isMasterAdmin } from "@/lib/auth";
 import crypto from "crypto";
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
 
 function generateApiKey(): { key: string; prefix: string } {
   const random = crypto.randomBytes(24).toString("hex");
@@ -23,8 +17,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (!(await isMasterAdmin(req))) {
+    return NextResponse.json({ success: false, error: "Unauthorized. Master admin token required." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -74,8 +68,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (!(await isMasterAdmin(req))) {
+    return NextResponse.json({ success: false, error: "Unauthorized. Master admin token required." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -100,8 +94,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (!(await isMasterAdmin(req))) {
+    return NextResponse.json({ success: false, error: "Unauthorized. Master admin token required." }, { status: 401 });
   }
 
   const { id } = await params;

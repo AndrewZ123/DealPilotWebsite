@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
+import { isAuthorized } from "@/lib/auth";
 
 /**
  * GET /api/admin/stats — Dashboard statistics.
  */
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 

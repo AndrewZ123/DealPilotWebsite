@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
+import { isMasterAdmin } from "@/lib/auth";
 import crypto from "crypto";
-
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
 
 function generateApiKey(): { key: string; prefix: string } {
   const random = crypto.randomBytes(24).toString("hex");
@@ -20,8 +14,8 @@ function generateApiKey(): { key: string; prefix: string } {
  * GET /api/admin/keys — List all API keys (key values are masked).
  */
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (!(await isMasterAdmin(req))) {
+    return NextResponse.json({ success: false, error: "Unauthorized. Master admin token required." }, { status: 401 });
   }
 
   const { data: keys, error } = await supabaseAdmin
@@ -40,8 +34,8 @@ export async function GET(req: NextRequest) {
  * POST /api/admin/keys — Create a new API key.
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (!(await isMasterAdmin(req))) {
+    return NextResponse.json({ success: false, error: "Unauthorized. Master admin token required." }, { status: 401 });
   }
 
   let body: Record<string, unknown>;

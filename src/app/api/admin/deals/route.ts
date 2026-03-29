@@ -1,24 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
+import { isAuthorized } from "@/lib/auth";
 import slugify from "slugify";
-
-/**
- * Simple token-based admin auth check.
- * Expects Authorization: Bearer <ADMIN_TOKEN>
- */
-function isAuthorized(req: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return false;
-  const auth = req.headers.get("authorization") || "";
-  return auth === `Bearer ${token}`;
-}
 
 /**
  * GET /api/admin/deals — List all deals with optional filtering.
  * Uses admin client (bypasses RLS, sees all deals including inactive).
  */
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
       { status: 401 }
@@ -60,7 +50,7 @@ export async function GET(req: NextRequest) {
  * Uses admin client (bypasses RLS).
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized. Provide Authorization: Bearer <token> header." },
       { status: 401 }
