@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { CATEGORIES } from "@/lib/categories";
 import TickerBar from "./TickerBar";
@@ -14,10 +15,15 @@ export default function Header() {
       <header className="border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-700 text-white font-bold text-sm transition group-hover:bg-brand-800 group-hover:scale-105">
-              DP
-            </div>
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <Image
+              src="/logo.png"
+              alt="DealPilot"
+              width={36}
+              height={36}
+              className="rounded-lg transition group-hover:scale-105"
+              priority
+            />
             <div>
               <span className="text-lg font-bold text-gray-900">Deal</span>
               <span className="text-lg font-bold text-brand-700">Pilot</span>
