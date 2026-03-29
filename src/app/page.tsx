@@ -80,29 +80,6 @@ export default async function Home({
             </div>
           </div>
 
-          {/* Trust badges */}
-          <div className="mt-14 grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-8">
-            <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-2xl mb-1">✅</div>
-              <div className="text-sm font-bold text-white">Verified Deals</div>
-              <div className="mt-0.5 text-xs text-brand-200/70">Every deal hand-checked</div>
-            </div>
-            <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-2xl mb-1">🔄</div>
-              <div className="text-sm font-bold text-white">Updated Daily</div>
-              <div className="mt-0.5 text-xs text-brand-200/70">Fresh offers every day</div>
-            </div>
-            <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-2xl mb-1">🏪</div>
-              <div className="text-sm font-bold text-white">Top Retailers</div>
-              <div className="mt-0.5 text-xs text-brand-200/70">Amazon, Best Buy & more</div>
-            </div>
-            <div className="rounded-2xl bg-white/5 p-5 backdrop-blur border border-white/10 text-center">
-              <div className="text-2xl mb-1">🆓</div>
-              <div className="text-sm font-bold text-white">100% Free</div>
-              <div className="mt-0.5 text-xs text-brand-200/70">No sign-up required</div>
-            </div>
-          </div>
         </div>
       </section>
 
