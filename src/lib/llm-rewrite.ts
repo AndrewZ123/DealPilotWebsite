@@ -68,7 +68,7 @@ Extract the direct retailer link, rewrite this deal, and return the JSON.`;
           { role: "user", content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 500,
+        max_tokens: 2000,
         response_format: { type: "json_object" },
       }),
       signal: AbortSignal.timeout(25_000), // 25s timeout for LLM
