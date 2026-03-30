@@ -7,10 +7,11 @@
 --   2. Enable "pg_cron" extension (if not already enabled)
 --   3. Enable "pg_net" extension (if not already enabled)
 --
--- THEN run this SQL in the Supabase SQL Editor.
+-- THEN run this ENTIRE script in the Supabase SQL Editor.
 --
--- IMPORTANT: Replace YOUR_ADMIN_TOKEN_HERE with your actual ADMIN_TOKEN
--- and YOUR_SITE_URL with https://www.dealpilot.org
+-- This runs auto-import every 15 minutes from inside Supabase itself.
+-- Combined with cron-job.org and GitHub Actions for triple redundancy.
+-- The concurrency guard in /api/auto-import prevents overlapping runs.
 -- ============================================================
 
 -- ── Step 1: Create a secure function to call the auto-import endpoint ──
@@ -24,9 +25,9 @@ DECLARE
   status_code integer;
   response_body text;
 BEGIN
-  -- Fire the HTTP GET request
+  -- Fire the HTTP GET request (token auth via query param)
   SELECT INTO request_id net.http_get(
-    url := 'https://www.dealpilot.org/api/auto-import?token=YOUR_ADMIN_TOKEN_HERE'
+    url := 'https://www.dealpilot.org/api/auto-import?token=Andrew1017'
   );
 
   -- Wait for the response (up to 120 seconds for LLM processing)
@@ -35,7 +36,7 @@ BEGIN
   FROM net._http_response
   WHERE id = request_id;
 
-  -- Log result to Postgres (optional — check via Supabase Dashboard → Logs)
+  -- Log result (check via Supabase Dashboard → Logs → Postgres Logs)
   RAISE NOTICE 'Auto-import response: status=%, body=%', status_code, LEFT(response_body, 200);
 END;
 $$;
@@ -54,9 +55,12 @@ SELECT cron.schedule(
   $$SELECT auto_import_deals();$$
 );
 
--- ── Step 3 (Optional): Verify the job is scheduled ──
+-- ── Step 3: Verify the job is scheduled ──
 -- Run this separately to check:
--- SELECT * FROM cron.job WHERE jobname = 'auto-import-deals';
+-- SELECT jobid, jobname, schedule, command FROM cron.job WHERE jobname = 'auto-import-deals';
+
+-- ── To view recent run history: ──
+-- SELECT * FROM cron.job_run_details WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'auto-import-deals') ORDER BY start_time DESC LIMIT 10;
 
 -- ── To unschedule later: ──
 -- SELECT cron.unschedule('auto-import-deals');
