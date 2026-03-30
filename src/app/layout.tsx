@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     siteName: "DealPilot",
   },
+  other: {
+    "impact-site-verification": "dafb96f1-a3a0-44a8-85d1-9a6519c8d754",
+  },
 };
 
 export default function RootLayout({
@@ -28,11 +31,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        {/* Impact affiliate verification — requires 'value' attribute */}
-        {/* @ts-expect-error Impact requires non-standard 'value' attribute on meta */}
-        <meta name="impact-site-verification" value="dafb96f1-a3a0-44a8-85d1-9a6519c8d754" />
-      </head>
       <body className={inter.className}>
         <div className="flex min-h-screen flex-col">
           <Header />
