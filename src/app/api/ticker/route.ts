@@ -49,13 +49,13 @@ function distillTitle(title: string): string {
 
 function categoryEmoji(cat: string): string {
   const map: Record<string, string> = {
-    Tech: "⚡",
-    Home: "🏠",
-    Fashion: "👗",
-    Toys: "🧸",
-    Misc: "🏷️",
+    tech: "⚡",
+    home: "🏠",
+    fashion: "👗",
+    toys: "🧸",
+    misc: "🏷️",
   };
-  return map[cat] || "🔥";
+  return map[(cat || "").toLowerCase()] || "🔥";
 }
 
 export async function GET() {
