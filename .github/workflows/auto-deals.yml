@@ -2,8 +2,11 @@ name: Auto-Import Deals
 
 on:
   schedule:
-    # Every 15 minutes
+    # Primary: every 15 min at :00, :15, :30, :45
     - cron: "*/15 * * * *"
+    # Backup offset: every 15 min at :07, :22, :37, :52
+    # If GitHub delays the primary, this one usually fires on time
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
   repository_dispatch: # Allow external trigger (e.g., cron-job.org)
     types: [auto-import]
@@ -19,7 +22,7 @@ concurrency:
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Trigger auto-import
@@ -28,14 +31,14 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL || 'https://www.dealpilot.org' }}
         run: |
           MAX_RETRIES=3
-          RETRY_DELAY=10
+          RETRY_DELAY=5
           ATTEMPT=1
 
           while [ $ATTEMPT -le $MAX_RETRIES ]; do
             echo "🔄 Attempt $ATTEMPT of $MAX_RETRIES..."
 
             HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
-              --max-time 120 \
+              --max-time 90 \
               -X POST \
               -H "Authorization: Bearer $ADMIN_TOKEN" \
               -H "Content-Type: application/json" \
