@@ -2,27 +2,54 @@ name: Auto-Import Deals
 
 on:
   schedule:
-    # Run every 5 minutes
-    - cron: "*/5 * * * *"
+    # Every 15 minutes — reliable on free tier (*/5 gets skipped/throttled)
+    - cron: "*/15 * * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
 
     steps:
       - name: Trigger auto-import
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://www.dealpilot.org' }}
         run: |
-          RESPONSE=$(curl -s -L -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            "https://www.dealpilot.org/api/auto-import")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          echo "HTTP Status: $HTTP_CODE"
-          echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "❌ Auto-import failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          ATTEMPT=1
+
+          while [ $ATTEMPT -le $MAX_RETRIES ]; do
+            echo "🔄 Attempt $ATTEMPT of $MAX_RETRIES..."
+
+            HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+              --max-time 120 \
+              -X POST \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              "$SITE_URL/api/auto-import")
+
+            echo "HTTP Status: $HTTP_CODE"
+
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "✅ Success!"
+              cat /tmp/response.json | jq '.' 2>/dev/null || cat /tmp/response.json
+              exit 0
+            fi
+
+            echo "❌ Failed with HTTP $HTTP_CODE"
+            cat /tmp/response.json | jq '.' 2>/dev/null || cat /tmp/response.json
+
+            if [ $ATTEMPT -lt $MAX_RETRIES ]; then
+              echo "⏳ Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          echo "💥 All $MAX_RETRIES attempts failed"
+          exit 1
