@@ -185,31 +185,24 @@ async function isCronOrAuthorized(req: NextRequest): Promise<boolean> {
 
 /** GET handler — invoked by Vercel Cron (vercel.json crons config) */
 export async function GET(req: NextRequest) {
-  return runImport(req);
-}
-
-/** POST handler — invoked manually or by GitHub Actions */
-export async function POST(req: NextRequest) {
-  const authorized = await isAuthorized(req);
+  const authorized = await isCronOrAuthorized(req);
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return runImport(req);
 }
 
-/** Shared import logic used by both GET (cron) and POST (manual) handlers */
-async function runImport(req: NextRequest): Promise<NextResponse> {
-  const isCron = req.headers.get("x-vercel-cron") === "true";
-  if (isCron) {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = req.headers.get("authorization") || "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (token !== cronSecret) {
-        return NextResponse.json({ error: "Invalid cron secret" }, { status: 401 });
-      }
-    }
+/** POST handler — invoked manually or by GitHub Actions */
+export async function POST(req: NextRequest) {
+  const authorized = await isCronOrAuthorized(req);
+  if (!authorized) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  return runImport(req);
+}
+
+/** Shared import logic — auth is handled by the callers above */
+async function runImport(_req: NextRequest): Promise<NextResponse> {
 
   const logs: string[] = [];
   let imported = 0;
