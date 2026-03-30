@@ -1,22 +1,20 @@
-name: Auto-Import Deals (Backup)
-
-# ┌──────────────────────────────────────────────────────────────────┐
-# ⚠️  PRIMARY cron is now Vercel Cron (vercel.json) every 15 min.  │
-#     This GitHub Actions workflow is a BACKUP that runs hourly.    │
-#     It also fires on manual dispatch for ad-hoc triggers.         │
-# └──────────────────────────────────────────────────────────────────┘
+name: Auto-Import Deals
 
 on:
   schedule:
-    # Backup: every hour at :10 (offset from Vercel's :00/:15/.:30/:45)
-    - cron: "10 * * * *"
-  workflow_dispatch:
-  repository_dispatch:
+    # Primary: every 15 min at :00, :15, :30, :45
+    - cron: "*/15 * * * *"
+    # Backup offset: every 15 min at :07, :22, :37, :52
+    # If GitHub delays the primary, this one usually fires on time
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+  repository_dispatch: # Allow external trigger (e.g., cron-job.org)
     types: [auto-import]
 
 permissions:
   contents: read
 
+# Prevent overlapping runs — if a previous run is still going, skip this one
 concurrency:
   group: auto-import-${{ github.ref }}
   cancel-in-progress: false
