@@ -32,7 +32,7 @@ export default function DealCard({
   const safeSale = hasValidPrice ? salePrice : 0;
   const safeDiscount = hasValidPrice ? discountPercent : 0;
   const savings = safeOriginal - safeSale;
-  const isHotDeal = safeDiscount >= 40;
+  const isHotDeal = safeDiscount >= 80;
   const isNewDeal = Date.now() - new Date(createdAt).getTime() < 3 * 60 * 60 * 1000; // 3 hours
 
   return (
