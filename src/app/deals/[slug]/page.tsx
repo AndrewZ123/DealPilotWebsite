@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import { notFound } from "next/navigation";
 
@@ -32,6 +33,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function DealDetailPage({ params }: Props) {
+  unstable_noStore(); // Prevent any server-side caching of this page
+
   const { slug } = await params;
   const { data: deal } = await supabase
     .from("deals")

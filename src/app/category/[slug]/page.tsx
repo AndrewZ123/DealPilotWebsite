@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import { getCategoryBySlug, CATEGORIES } from "@/lib/categories";
 import DealGrid from "@/components/DealGrid";
@@ -22,6 +23,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoryPage({ params }: Props) {
+  unstable_noStore(); // Prevent any server-side caching of this page
+
   const { slug } = await params;
   const cat = getCategoryBySlug(slug);
   if (!cat) notFound();

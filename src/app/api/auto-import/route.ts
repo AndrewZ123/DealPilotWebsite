@@ -160,10 +160,55 @@ async function insertDeal(
 
 // ── Main handler ─────────────────────────────────────────────────────────
 
+/**
+ * Verify the request is either:
+ * 1. Authenticated via ADMIN_TOKEN / API key (manual trigger or GitHub Actions)
+ * 2. A legitimate Vercel Cron invocation (x-vercel-cron header present)
+ */
+async function isCronOrAuthorized(req: NextRequest): Promise<boolean> {
+  // Vercel Cron includes this header automatically
+  const isVercelCron = req.headers.get("x-vercel-cron") === "true";
+  if (isVercelCron) {
+    // Optionally verify CRON_SECRET for extra security
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = req.headers.get("authorization") || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+      return token === cronSecret;
+    }
+    return true; // No CRON_SECRET configured, trust Vercel Cron header
+  }
+
+  // Fall back to standard admin auth
+  return isAuthorized(req);
+}
+
+/** GET handler — invoked by Vercel Cron (vercel.json crons config) */
+export async function GET(req: NextRequest) {
+  return runImport(req);
+}
+
+/** POST handler — invoked manually or by GitHub Actions */
 export async function POST(req: NextRequest) {
   const authorized = await isAuthorized(req);
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runImport(req);
+}
+
+/** Shared import logic used by both GET (cron) and POST (manual) handlers */
+async function runImport(req: NextRequest): Promise<NextResponse> {
+  const isCron = req.headers.get("x-vercel-cron") === "true";
+  if (isCron) {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = req.headers.get("authorization") || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+      if (token !== cronSecret) {
+        return NextResponse.json({ error: "Invalid cron secret" }, { status: 401 });
+      }
+    }
   }
 
   const logs: string[] = [];

@@ -1,3 +1,4 @@
+import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
@@ -15,6 +16,8 @@ export default async function Home({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  unstable_noStore(); // Prevent any server-side caching of this page
+
   const params = await searchParams;
   const page = Math.max(1, Number(params.page || "1"));
 
