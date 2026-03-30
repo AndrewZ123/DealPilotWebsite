@@ -26,7 +26,7 @@ export const maxDuration = 60;
 let sourceUrlColumnExists = true;
 
 /** Max deals to process per single API call (avoid timeouts) */
-const MAX_DEALS_PER_RUN = 2;
+const MAX_DEALS_PER_RUN = 4;
 
 /** How many LLM calls to fire in parallel — keep at 1 to avoid rate limits */
 const CONCURRENCY = 1;

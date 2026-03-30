@@ -2,9 +2,19 @@ name: Auto-Import Deals
 
 on:
   schedule:
-    # Every 15 minutes — reliable on free tier (*/5 gets skipped/throttled)
+    # Every 15 minutes
     - cron: "*/15 * * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
+  repository_dispatch: # Allow external trigger (e.g., cron-job.org)
+    types: [auto-import]
+
+permissions:
+  contents: read
+
+# Prevent overlapping runs — if a previous run is still going, skip this one
+concurrency:
+  group: auto-import-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   import:

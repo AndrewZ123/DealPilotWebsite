@@ -1,0 +1,26 @@
+name: Keep Alive
+
+# GitHub disables scheduled workflows on repos with no activity for 60 days.
+# This workflow creates a dummy commit every 50 days to prevent that.
+on:
+  schedule:
+    # Run on the 1st and 15th of every month (~every 15 days, well within 60-day limit)
+    - cron: "0 0 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep repo alive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Create an empty commit — just enough to register as activity
+          git commit --allow-empty -m "chore: keep-alive [skip ci]"
+          git push
