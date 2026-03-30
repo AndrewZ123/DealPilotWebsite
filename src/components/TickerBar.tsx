@@ -1,26 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
-const TICKER_ITEMS = [
-  "🔥 Sony WH-1000XM5 just dropped to $248 — 38% off!",
-  "⚡ New: Robot Vacuum with mapping for $199 (was $399)",
-  "🏷️ Flash Deal: AirPods Pro 2 at lowest price this month",
-  "🛒 Someone just snagged a 4K TV for $297 — 52% off",
-  "💡 Trending: Smart Home bundles up to 60% off",
-  "🎯 Hot: Leather bags from $29, limited stock",
-  "📦 Free shipping alert on orders $35+ at select stores",
-  "🏆 DealPilot saved shoppers an average of $47 this week",
-  "⏰ Ending soon: 50% off all fitness gear",
-  "✨ Just in: Summer fashion deals starting at $12",
+const FALLBACK_ITEMS = [
+  "🔥 DealPilot — Best deals updated every 15 minutes",
+  "⚡ New deals dropping constantly — refresh to see the latest",
+  "🏷️ We track prices so you don't have to",
 ];
+
+interface TickerItem {
+  text: string;
+  href?: string;
+}
 
 export default function TickerBar() {
   const [mounted, setMounted] = useState(false);
+  const [items, setItems] = useState<TickerItem[]>([]);
+
+  const fetchTicker = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ticker");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+        setItems(data.items.map((text: string) => ({ text })));
+      }
+    } catch {
+      // Silently fail — fallback items remain
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    fetchTicker();
+
+    // Auto-refresh every 5 minutes to pick up new deals
+    const interval = setInterval(fetchTicker, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchTicker]);
 
   if (!mounted) {
     return (
@@ -32,16 +49,35 @@ export default function TickerBar() {
     );
   }
 
-  const items = [...TICKER_ITEMS, ...TICKER_ITEMS]; // duplicate for seamless loop
+  const displayItems: TickerItem[] =
+    items.length > 0 ? items : FALLBACK_ITEMS.map((text) => ({ text }));
+
+  // Duplicate for seamless loop
+  const loopItems = [...displayItems, ...displayItems];
+
+  // Adjust animation duration based on item count for consistent speed
+  const duration = Math.max(20, displayItems.length * 4);
 
   return (
     <div className="bg-brand-800 text-white py-1.5 text-xs overflow-hidden relative">
       <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-brand-800 to-transparent z-10" />
       <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-brand-800 to-transparent z-10" />
-      <div className="animate-ticker flex whitespace-nowrap">
-        {items.map((item, i) => (
+      <div
+        className="animate-ticker flex whitespace-nowrap"
+        style={{ animationDuration: `${duration}s` }}
+      >
+        {loopItems.map((item, i) => (
           <span key={i} className="mx-8 inline-block">
-            {item}
+            {item.href ? (
+              <a
+                href={item.href}
+                className="hover:underline hover:text-brand-200 transition-colors"
+              >
+                {item.text}
+              </a>
+            ) : (
+              item.text
+            )}
           </span>
         ))}
       </div>
