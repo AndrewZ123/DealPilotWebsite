@@ -166,20 +166,29 @@ async function insertDeal(
  * 2. A legitimate Vercel Cron invocation (x-vercel-cron header present)
  */
 async function isCronOrAuthorized(req: NextRequest): Promise<boolean> {
-  // Vercel Cron includes this header automatically
+  // Check 1: Token via query parameter (e.g., /api/auto-import?token=xxx)
+  // Allows simple HTTP GET pings from external cron services like cron-job.org
+  const queryToken = req.nextUrl.searchParams.get("token");
+  if (queryToken) {
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (adminToken && queryToken === adminToken) {
+      return true;
+    }
+  }
+
+  // Check 2: Vercel Cron (includes x-vercel-cron header automatically)
   const isVercelCron = req.headers.get("x-vercel-cron") === "true";
   if (isVercelCron) {
-    // Optionally verify CRON_SECRET for extra security
     const cronSecret = process.env.CRON_SECRET;
     if (cronSecret) {
       const authHeader = req.headers.get("authorization") || "";
       const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
       return token === cronSecret;
     }
-    return true; // No CRON_SECRET configured, trust Vercel Cron header
+    return true;
   }
 
-  // Fall back to standard admin auth
+  // Check 3: Standard admin auth (Bearer token in Authorization header)
   return isAuthorized(req);
 }
 
