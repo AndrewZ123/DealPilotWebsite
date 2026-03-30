@@ -20,13 +20,23 @@ interface DealRow {
   category: string;
 }
 
+const MAX_HEADLINE_LEN = 55;
+
+function truncate(s: string, max = MAX_HEADLINE_LEN): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1).replace(/\s+\S*$/, "") + "…";
+}
+
 function buildFallbackHeadlines(deals: DealRow[]): string[] {
   return deals.map((d) => {
     const emoji = categoryEmoji(d.category);
+    // Shorten title if needed
+    let t = d.title;
+    if (t.length > 30) t = t.slice(0, 29).replace(/\s+\S*$/, "") + "…";
     if (d.discountPercent >= 20) {
-      return `${emoji} ${d.title} — ${d.discountPercent}% off (was $${d.originalPrice.toFixed(2)}, now $${d.salePrice.toFixed(2)})`;
+      return truncate(`${emoji} ${t} — $${Math.round(d.salePrice)} (${d.discountPercent}% off)`);
     }
-    return `${emoji} ${d.title} — $${d.salePrice.toFixed(2)} at ${d.store}`;
+    return truncate(`${emoji} ${t} — $${Math.round(d.salePrice)} at ${d.store}`);
   });
 }
 
@@ -51,14 +61,20 @@ async function generateLLMHeadlines(deals: DealRow[]): Promise<string[] | null> 
     )
     .join("\n");
 
-  const systemPrompt = `You are DealPilot's marketing copywriter. You receive a list of deals and generate SHORT, punchy, one-line headlines for a scrolling ticker bar. Each headline should be engaging and include the key savings info. Start each with a relevant emoji. Keep each headline under 80 characters. Do NOT use quotes around the headlines.
+  const systemPrompt = `You are DealPilot's marketing copywriter. You receive a list of deals and generate SHORT ticker headlines. ABSOLUTE RULES:
+- MUST be under 50 characters each (including emoji)
+- Start with ONE relevant emoji
+- Format: emoji + short product name + price + percent off
+- NO store names, NO shipping info, NO "with..." clauses
+- Be punchy and scannable — these scroll fast in a small bar
 
-Example style:
-🔥 Sony WH-1000XM5 just dropped to $248 — 38% off!
-⚡ Robot Vacuum with mapping for $199 (was $399)
-🏷️ AirPods Pro 2 at lowest price this month
+Good examples (all under 50 chars):
+🔥 Sony headphones — $248 (38% off)
+⚡ Robot Vacuum — $199 (50% off)
+🏷️ AirPods Pro 2 — $189 (25% off)
 
-Respond with a JSON array of strings only. No markdown, no explanation.`;
+Respond with a JSON object: {"headlines": ["...", "..."]}
+No markdown, no explanation, no quotes around headlines.`;
 
   try {
     const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
@@ -91,8 +107,11 @@ Respond with a JSON array of strings only. No markdown, no explanation.`;
 
     if (!Array.isArray(headlines) || headlines.length === 0) return null;
 
-    // Validate each item is a string
-    return headlines.filter((h): h is string => typeof h === "string").slice(0, 10);
+    // Validate each item is a string, truncate if LLM ignored length rule
+    return headlines
+      .filter((h): h is string => typeof h === "string")
+      .slice(0, 10)
+      .map((h) => truncate(h, MAX_HEADLINE_LEN));
   } catch {
     return null;
   }
