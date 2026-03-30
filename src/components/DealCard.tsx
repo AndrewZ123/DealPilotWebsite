@@ -56,18 +56,6 @@ export default function DealCard({
         </div>
       </div>
 
-      {/* Image */}
-      <Link href={`/deals/${slug}`} className="block aspect-[3/2] w-full overflow-hidden bg-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl || "https://placehold.co/600x400/e2e8f0/94a3b8?text=No+Image"}
-          alt={title}
-          className="h-full w-full object-cover transition-all duration-500 group-hover:scale-110"
-        />
-        {/* Gradient overlay on hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      </Link>
-
       <div className="flex flex-1 flex-col p-5">
         {/* Category pill + store */}
         <div className="flex items-center justify-between">

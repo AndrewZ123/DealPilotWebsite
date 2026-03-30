@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: `${deal.title} — ${deal.discountPercent}% Off`,
       description: `Was $${deal.originalPrice.toFixed(2)}, now $${deal.salePrice.toFixed(2)} at ${deal.store}. ${deal.description}`,
-      images: deal.imageUrl ? [{ url: deal.imageUrl }] : undefined,
+      images: undefined,
       type: "article",
     },
   };
@@ -91,33 +91,19 @@ export default async function DealDetailPage({ params }: Props) {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-2">
-          {/* Left — Image */}
-          <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-200">
-              {deal.imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={deal.imageUrl}
-                  alt={deal.title}
-                  className="w-full object-cover"
-                />
-              )}
-              {/* Badges overlay */}
-              <div className="absolute left-4 top-4 flex gap-2">
-                {isHotDeal && (
-                  <span className="animate-bounce-subtle inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
-                    🔥 Hot Deal
-                  </span>
-                )}
-                <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
-                  -{deal.discountPercent}% OFF
-                </span>
-              </div>
-            </div>
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Badges */}
+          <div className="flex items-center gap-2">
+            {isHotDeal && (
+              <span className="animate-bounce-subtle inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
+                🔥 Hot Deal
+              </span>
+            )}
+            <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg">
+              -{deal.discountPercent}% OFF
+            </span>
           </div>
 
-          {/* Right — Details */}
           <div className="space-y-6">
             {/* Category pill + store */}
             <div className="flex items-center gap-3">
@@ -230,12 +216,6 @@ export default async function DealDetailPage({ params }: Props) {
                   href={`/deals/${r.slug}`}
                   className="group flex items-center gap-4 rounded-2xl bg-white border border-gray-200 p-4 shadow-sm transition-all hover:shadow-md hover:border-brand-200"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={r.imageUrl || "https://placehold.co/100x100/e2e8f0/94a3b8?text=No+Image"}
-                    alt={r.title}
-                    className="h-16 w-16 rounded-xl object-cover flex-shrink-0"
-                  />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-bold text-gray-900 group-hover:text-brand-700 transition truncate">
                       {r.title}
