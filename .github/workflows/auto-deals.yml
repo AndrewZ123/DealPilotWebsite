@@ -1,0 +1,21 @@
+name: Auto-Import Deals
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger auto-import
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://dealpilot.org/api/auto-import" \
+            | jq '.' || echo "Request completed"
