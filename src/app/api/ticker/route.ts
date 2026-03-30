@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const ZAI_API_KEY = process.env.ZAI_API_KEY || "";
 const ZAI_BASE_URL = process.env.ZAI_BASE_URL || "https://api.z.ai/api/coding/paas/v4";
 const ZAI_MODEL = process.env.ZAI_MODEL || "glm-4.5";
