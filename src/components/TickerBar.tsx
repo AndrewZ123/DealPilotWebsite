@@ -19,7 +19,12 @@ export default function TickerBar() {
 
   const fetchTicker = useCallback(async () => {
     try {
-      const res = await fetch("/api/ticker");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000); // 8s client timeout
+
+      const res = await fetch("/api/ticker", { signal: controller.signal });
+      clearTimeout(timeout);
+
       if (!res.ok) return;
       const data = await res.json();
       if (data.items && Array.isArray(data.items) && data.items.length > 0) {
@@ -34,9 +39,17 @@ export default function TickerBar() {
     setMounted(true);
     fetchTicker();
 
-    // Auto-refresh every 3 hours to match the ticker deal window
-    const interval = setInterval(fetchTicker, 3 * 60 * 60 * 1000);
-    return () => clearInterval(interval);
+    // Retry once after 15s in case first fetch failed/timed out
+    const retryTimer = setTimeout(() => {
+      if (items.length === 0) fetchTicker();
+    }, 15000);
+
+    // Auto-refresh every 10 minutes
+    const interval = setInterval(fetchTicker, 10 * 60 * 1000);
+    return () => {
+      clearTimeout(retryTimer);
+      clearInterval(interval);
+    };
   }, [fetchTicker]);
 
   if (!mounted) {
