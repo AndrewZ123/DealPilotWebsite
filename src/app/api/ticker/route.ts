@@ -125,10 +125,10 @@ OUTPUT: {"headlines": ["..."]}`;
           { role: "user", content: `Rewrite these deals:\n\n${dealList}` },
         ],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 4096,
         response_format: { type: "json_object" },
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
@@ -137,9 +137,17 @@ OUTPUT: {"headlines": ["..."]}`;
     }
 
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const msg = data?.choices?.[0]?.message;
+    // glm-4.5 reasoning model: actual output in content, thinking in reasoning_content
+    let content = msg?.content || "";
+    // If content is empty, try to extract JSON from reasoning_content
+    if (!content && msg?.reasoning_content) {
+      const jsonMatch = msg.reasoning_content.match(/\{[\s\S]*"headlines"[\s\S]*\}/);
+      if (jsonMatch) content = jsonMatch[0];
+    }
+    content = content.trim();
     if (!content) {
-      console.log("[ticker] No content in LLM response");
+      console.log("[ticker] No content in LLM response", JSON.stringify(msg).slice(0, 300));
       return null;
     }
 
