@@ -174,10 +174,10 @@ export async function GET() {
     return NextResponse.json({ items: cachedItems });
   }
 
-  // Only pick top deals from the last 3 hours, sorted by highest discount
+  // Try to get top deals from the last 3 hours (sorted by highest discount)
   const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
 
-  const { data: deals, error } = await supabase
+  const { data: recentDeals } = await supabase
     .from("deals")
     .select("title, slug, store, originalPrice, salePrice, discountPercent, category")
     .eq("active", true)
@@ -185,19 +185,22 @@ export async function GET() {
     .order("discountPercent", { ascending: false })
     .limit(10);
 
-  // If fewer than 3 deals in the last 3 hours, fall back to best deals overall
-  let finalDeals = deals;
-  if ((!deals || deals.length < 3)) {
-    const { data: fallback } = await supabase
+  let finalDeals: DealRow[] | null = recentDeals && recentDeals.length >= 3
+    ? recentDeals
+    : null;
+
+  // If fewer than 3 recent deals, fall back to best deals overall
+  if (!finalDeals) {
+    const { data: bestDeals } = await supabase
       .from("deals")
       .select("title, slug, store, originalPrice, salePrice, discountPercent, category")
       .eq("active", true)
       .order("discountPercent", { ascending: false })
       .limit(10);
-    finalDeals = fallback;
+    finalDeals = bestDeals;
   }
 
-  if (error || !finalDeals || finalDeals.length === 0) {
+  if (!finalDeals || finalDeals.length === 0) {
     if (cachedItems) return NextResponse.json({ items: cachedItems });
     return NextResponse.json({
       items: ["🔥 DealPilot — Best deals updated every 15 minutes"],
