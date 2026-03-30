@@ -16,6 +16,9 @@ import { RSS_SOURCES } from "@/lib/rss-sources";
 import { fetchRSSFeed } from "@/lib/rss-parser";
 import { rewriteDeal } from "@/lib/llm-rewrite";
 
+// Track whether sourceUrl column exists (avoid repeated failed queries)
+let sourceUrlColumnExists = true;
+
 export async function POST(req: NextRequest) {
   // ── Auth check ──
   const authorized = await isAuthorized(req);
@@ -45,17 +48,49 @@ export async function POST(req: NextRequest) {
 
     // ── Step 2: Process each item ──
     for (const raw of rawDeals) {
-      // Dedup: check if we already imported from this source URL
-      const { data: existing } = await supabaseAdmin
-        .from("deals")
-        .select("id")
-        .eq("sourceUrl", raw.link)
-        .maybeSingle();
+      // Dedup: check if we already imported this deal
+      let isDuplicate = false;
 
-      if (existing) {
-        skipped++;
-        continue;
+      if (sourceUrlColumnExists) {
+        try {
+          const { data: existing, error: dedupError } = await supabaseAdmin
+            .from("deals")
+            .select("id")
+            .eq("sourceUrl", raw.link)
+            .maybeSingle();
+
+          if (dedupError) {
+            // Column likely doesn't exist — fall back to title-based dedup
+            if (dedupError.message?.includes("does not exist")) {
+              sourceUrlColumnExists = false;
+              logs.push(`  ℹ️ sourceUrl column not found, using title-based dedup`);
+            }
+          } else if (existing) {
+            skipped++;
+            isDuplicate = true;
+          }
+        } catch {
+          sourceUrlColumnExists = false;
+        }
       }
+
+      // Fallback: title-based dedup
+      if (!isDuplicate && !sourceUrlColumnExists) {
+        const normalizedTitle = raw.title.toLowerCase().trim().slice(0, 100);
+        const { data: existingByTitle } = await supabaseAdmin
+          .from("deals")
+          .select("id")
+          .ilike("title", `${normalizedTitle}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingByTitle) {
+          skipped++;
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) continue;
 
       // ── Step 3: LLM rewrite + extract direct retailer URL ──
       const { deal, error } = await rewriteDeal(raw);
@@ -72,34 +107,61 @@ export async function POST(req: NextRequest) {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
         .slice(0, 80);
-      const slugSuffix = Date.now().toString(36).slice(-4);
+      const slugSuffix = Date.now().toString(36).slice(-4) +
+        Math.random().toString(36).slice(2, 5);
       const slug = `${slugBase}-${slugSuffix}`;
 
       // ── Step 5: Insert into Supabase ──
+      const insertData: Record<string, unknown> = {
+        slug,
+        title: deal.title,
+        description: deal.description,
+        store: deal.store,
+        originalPrice: deal.originalPrice,
+        salePrice: deal.salePrice,
+        discountPercent: deal.discountPercent,
+        category: deal.category,
+        imageUrl: "",
+        finalUrl: deal.directUrl,
+        active: true,
+      };
+
+      // Only include sourceUrl if the column exists
+      if (sourceUrlColumnExists) {
+        insertData.sourceUrl = raw.link;
+      }
+
       const { error: insertError } = await supabaseAdmin
         .from("deals")
-        .insert({
-          slug,
-          title: deal.title,
-          description: deal.description,
-          store: deal.store,
-          originalPrice: deal.originalPrice,
-          salePrice: deal.salePrice,
-          discountPercent: deal.discountPercent,
-          category: deal.category,
-          imageUrl: "",
-          finalUrl: deal.directUrl,
-          sourceUrl: raw.link,
-          active: true,
-        });
+        .insert(insertData);
 
       if (insertError) {
-        failed++;
-        logs.push(`  ❌ Insert failed for "${deal.title.slice(0, 50)}": ${insertError.message}`);
-      } else {
-        imported++;
-        logs.push(`  ✅ Imported: ${deal.title.slice(0, 60)} → ${deal.store}`);
+        // If sourceUrl column is the issue, retry without it
+        if (
+          insertError.message?.includes("sourceUrl") &&
+          insertError.message?.includes("does not exist")
+        ) {
+          sourceUrlColumnExists = false;
+          delete insertData.sourceUrl;
+
+          const { error: retryError } = await supabaseAdmin
+            .from("deals")
+            .insert(insertData);
+
+          if (retryError) {
+            failed++;
+            logs.push(`  ❌ Insert failed for "${deal.title.slice(0, 50)}": ${retryError.message}`);
+            continue;
+          }
+        } else {
+          failed++;
+          logs.push(`  ❌ Insert failed for "${deal.title.slice(0, 50)}": ${insertError.message}`);
+          continue;
+        }
       }
+
+      imported++;
+      logs.push(`  ✅ Imported: ${deal.title.slice(0, 60)} → ${deal.store}`);
     }
   }
 

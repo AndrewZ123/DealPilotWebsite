@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 // Always render fresh — ensures deals appear instantly after admin changes
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 type Props = { params: Promise<{ slug: string }> };
 

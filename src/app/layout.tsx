@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
-    default: "DealPilot — Curated Deals & Discounts",
+    default: "DealPilot: Curated Deals & Discounts",
     template: "%s | DealPilot",
   },
   description:

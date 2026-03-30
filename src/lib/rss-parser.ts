@@ -6,7 +6,7 @@
  */
 
 import { XMLParser } from "fast-xml-parser";
-import type { RSSSource } from "./rss-sources";
+import type { RssSource } from "./rss-sources";
 
 export interface RawRSSDeal {
   /** Item title from the feed */
@@ -27,6 +27,7 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   textNodeName: "#text",
+  removeNSPrefix: true,
   isArray: (name) => name === "item" || name === "entry",
 });
 
@@ -34,7 +35,7 @@ const parser = new XMLParser({
  * Fetch and parse a single RSS feed into raw deal items.
  */
 export async function fetchRSSFeed(
-  source: RSSSource
+  source: RssSource
 ): Promise<{ deals: RawRSSDeal[]; errors: string[] }> {
   const errors: string[] = [];
   const deals: RawRSSDeal[] = [];
@@ -79,7 +80,10 @@ export async function fetchRSSFeed(
           item.summary ??
           item.content?.["#text"] ??
           "";
+        // content:encoded is accessed as "encoded" after removeNSPrefix
         const content =
+          item.encoded?.["#text"] ??
+          item.encoded ??
           item["content:encoded"]?.["#text"] ??
           item["content:encoded"] ??
           item.content?.["#text"] ??

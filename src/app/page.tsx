@@ -6,6 +6,7 @@ import Link from "next/link";
 
 // Always render fresh — ensures deals appear instantly after admin changes
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 const PAGE_SIZE = 18;
 
