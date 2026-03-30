@@ -101,6 +101,25 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      // ── Step 3b: Validate price — skip deals with $0 prices ──
+      if (!deal.originalPrice || !deal.salePrice || deal.originalPrice <= 0 || deal.salePrice <= 0) {
+        failed++;
+        logs.push(`  ❌ "${raw.title.slice(0, 50)}": No valid prices (original=$${deal.originalPrice}, sale=$${deal.salePrice})`);
+        continue;
+      }
+
+      // ── Step 3c: Validate category — map to canonical list ──
+      const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
+      if (!VALID_CATEGORIES.includes(deal.category)) {
+        // Try to map common variations
+        const catMap: Record<string, string> = {
+          "Electronics": "Tech", "Audio": "Tech", "Computers": "Tech", "Phones": "Tech",
+          "TV": "Tech", "Gaming": "Toys", "Kitchen": "Home", "Outdoor": "Home",
+          "Beauty": "Fashion", "Fitness": "Home", "Food": "Home", "Travel": "Misc",
+        };
+        deal.category = catMap[deal.category] || "Misc";
+      }
+
       // ── Step 4: Generate slug ──
       const slugBase = deal.title
         .toLowerCase()

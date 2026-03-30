@@ -32,9 +32,9 @@ const SYSTEM_PROMPT = `You are DealPilot's deal curator AI. You receive raw RSS 
 
 4. EXTRACT the store name (the actual retailer, not the deal site).
 
-5. EXTRACT prices: original price (MSRP/regular) and sale price. Calculate the discount percentage. If only one price is mentioned, estimate the original based on typical discount.
+5. EXTRACT PRICES (CRITICAL — REQUIRED): You MUST extract both originalPrice and salePrice as positive numbers greater than 0. Look carefully at the title, description, and HTML content for price information ($XX.XX, $XX, XX% off, etc.). If the exact original price is not stated, estimate it based on the product type and discount mentioned. If NO price information is available at all, set originalPrice to 0 and salePrice to 0 — the deal will be skipped. Calculate discountPercent as: Math.round((1 - salePrice/originalPrice) * 100).
 
-6. ASSIGN a category from this list: Tech, Home, Fashion, Toys, Outdoor, Kitchen, Beauty, Gaming, Audio, Computers, Phones, TV, Fitness, Food, Travel, Misc
+6. ASSIGN a category — you MUST choose exactly one from this list (no others allowed): Tech, Home, Fashion, Toys, Misc
 
 You MUST respond with valid JSON only — no markdown, no explanation. Use this exact shape:
 {"title":"...","description":"...","store":"...","directUrl":"...","originalPrice":99.99,"salePrice":49.99,"discountPercent":50,"category":"Tech"}`;

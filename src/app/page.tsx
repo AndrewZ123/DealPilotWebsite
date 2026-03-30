@@ -28,6 +28,11 @@ export default async function Home({
   const dealList = deals ?? [];
   const totalCount = total ?? 0;
 
+  // Generalized count: "200+" until 300+, "300+" until 400+, etc.
+  const displayCount = totalCount >= 100
+    ? `${Math.floor(totalCount / 100) * 100}+`
+    : String(totalCount);
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
@@ -47,7 +52,7 @@ export default async function Home({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
               </span>
-              Live — {totalCount} deals updated minutes ago
+              Live — {displayCount} deals updated minutes ago
             </div>
 
             <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">

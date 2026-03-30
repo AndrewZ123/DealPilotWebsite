@@ -27,8 +27,12 @@ export default function DealCard({
   createdAt,
 }: DealCardProps) {
   const timeAgo = getTimeAgo(new Date(createdAt));
-  const savings = originalPrice - salePrice;
-  const isHotDeal = discountPercent >= 40;
+  const hasValidPrice = salePrice > 0 && originalPrice > 0;
+  const safeOriginal = hasValidPrice ? originalPrice : 0;
+  const safeSale = hasValidPrice ? salePrice : 0;
+  const safeDiscount = hasValidPrice ? discountPercent : 0;
+  const savings = safeOriginal - safeSale;
+  const isHotDeal = safeDiscount >= 40;
   const isNewDeal = Date.now() - new Date(createdAt).getTime() < 3 * 60 * 60 * 1000; // 3 hours
 
   return (
@@ -46,9 +50,11 @@ export default function DealCard({
               ✨ NEW
             </span>
           )}
-          <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-bold text-white">
-            -{discountPercent}%
-          </span>
+          {hasValidPrice && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-bold text-white">
+              -{safeDiscount}%
+            </span>
+          )}
         </div>
 
         {/* Category pill + store */}
@@ -93,17 +99,25 @@ export default function DealCard({
 
         {/* Price row */}
         <div className="mt-auto pt-4">
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-gray-900">
-              ${salePrice.toFixed(2)}
-            </span>
-            <span className="text-sm text-gray-400 line-through">
-              ${originalPrice.toFixed(2)}
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs font-semibold text-green-600">
-            You save ${savings.toFixed(2)}
-          </p>
+          {hasValidPrice ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-gray-900">
+                  ${safeSale.toFixed(2)}
+                </span>
+                <span className="text-sm text-gray-400 line-through">
+                  ${safeOriginal.toFixed(2)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs font-semibold text-green-600">
+                You save ${savings.toFixed(2)}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm font-semibold text-gray-500">
+              Click to see price
+            </p>
+          )}
         </div>
 
         {/* CTA button — routes through redirect system */}
