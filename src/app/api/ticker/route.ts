@@ -20,26 +20,6 @@ interface DealRow {
   category: string;
 }
 
-const MAX_HEADLINE_LEN = 55;
-
-function truncate(s: string, max = MAX_HEADLINE_LEN): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1).replace(/\s+\S*$/, "") + "…";
-}
-
-function buildFallbackHeadlines(deals: DealRow[]): string[] {
-  return deals.map((d) => {
-    const emoji = categoryEmoji(d.category);
-    // Shorten title if needed
-    let t = d.title;
-    if (t.length > 30) t = t.slice(0, 29).replace(/\s+\S*$/, "") + "…";
-    if (d.discountPercent >= 20) {
-      return truncate(`${emoji} ${t} — $${Math.round(d.salePrice)} (${d.discountPercent}% off)`);
-    }
-    return truncate(`${emoji} ${t} — $${Math.round(d.salePrice)} at ${d.store}`);
-  });
-}
-
 function categoryEmoji(cat: string): string {
   const map: Record<string, string> = {
     Tech: "⚡",
@@ -57,24 +37,32 @@ async function generateLLMHeadlines(deals: DealRow[]): Promise<string[] | null> 
   const dealList = deals
     .map(
       (d, i) =>
-        `${i + 1}. ${d.title} | ${d.store} | was $${d.originalPrice.toFixed(2)} → now $${d.salePrice.toFixed(2)} (${d.discountPercent}% off) | ${d.category}`
+        `${i + 1}. "${d.title}" | ${d.store} | was $${d.originalPrice.toFixed(2)} → now $${d.salePrice.toFixed(2)} (${d.discountPercent}% off) | category: ${d.category}`
     )
     .join("\n");
 
-  const systemPrompt = `You are DealPilot's marketing copywriter. You receive a list of deals and generate SHORT ticker headlines. ABSOLUTE RULES:
-- MUST be under 50 characters each (including emoji)
-- Start with ONE relevant emoji
-- Format: emoji + short product name + price + percent off
-- NO store names, NO shipping info, NO "with..." clauses
-- Be punchy and scannable — these scroll fast in a small bar
+  const systemPrompt = `You write SHORT, punchy ticker headlines for a deal site. Your job is to DISTILL each deal to its essence.
 
-Good examples (all under 50 chars):
-🔥 Sony headphones — $248 (38% off)
-⚡ Robot Vacuum — $199 (50% off)
-🏷️ AirPods Pro 2 — $189 (25% off)
+RULES:
+- Rename the product to its simplest recognizable form. Drop brand noise, model numbers, qualifiers, color/size variants.
+  "totes Adult's Red Rain Poncho" → "Rain Poncho"
+  "Amazon Basics CR2032 3V Lithium Batteries (10-Pack)" → "CR2032 Batteries 10-Pack"
+  "adidas Men's Ultimashow Athletic Shoes in 2 Colors" → "Adidas Running Shoes"
+- Format: emoji + short product name + sale price + discount %
+- Use rounded whole dollars (no cents)
+- Keep each headline under 60 chars — but NEVER use "..." or "…" to truncate
+- Every headline must be a complete, coherent phrase
+- Start with ONE relevant emoji matching the category
+
+Examples of PERFECT output:
+🌧️ Rain Poncho $4 (66% off)
+🔋 CR2032 Batteries 10-Pack $7 (34% off)
+👟 Adidas Running Shoes $24 (60% off)
+🎸 Gretsch Guitars from $150 (40% off)
+🧱 LEGO Flower Bouquet $38 (23% off)
 
 Respond with a JSON object: {"headlines": ["...", "..."]}
-No markdown, no explanation, no quotes around headlines.`;
+No markdown, no explanation.`;
 
   try {
     const res = await fetch(`${ZAI_BASE_URL}/chat/completions`, {
@@ -87,7 +75,7 @@ No markdown, no explanation, no quotes around headlines.`;
         model: ZAI_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate catchy one-line headlines for these deals:\n\n${dealList}` },
+          { role: "user", content: `Generate ticker headlines for these deals:\n\n${dealList}` },
         ],
         temperature: 0.7,
         max_tokens: 1500,
@@ -107,11 +95,8 @@ No markdown, no explanation, no quotes around headlines.`;
 
     if (!Array.isArray(headlines) || headlines.length === 0) return null;
 
-    // Validate each item is a string, truncate if LLM ignored length rule
-    return headlines
-      .filter((h): h is string => typeof h === "string")
-      .slice(0, 10)
-      .map((h) => truncate(h, MAX_HEADLINE_LEN));
+    // Validate each item is a string
+    return headlines.filter((h): h is string => typeof h === "string").slice(0, 10);
   } catch {
     return null;
   }
@@ -132,7 +117,6 @@ export async function GET() {
     .limit(10);
 
   if (error || !deals || deals.length === 0) {
-    // Return existing cache (even if stale) or empty
     if (cachedItems) {
       return NextResponse.json({ items: cachedItems });
     }
@@ -141,8 +125,11 @@ export async function GET() {
     });
   }
 
-  // Try LLM headlines, fall back to template
-  const headlines = (await generateLLMHeadlines(deals)) || buildFallbackHeadlines(deals);
+  // Try LLM headlines, fall back to simple template
+  const headlines = (await generateLLMHeadlines(deals)) || deals.map((d) => {
+    const emoji = categoryEmoji(d.category);
+    return `${emoji} ${d.title.split(" - ")[0].split(" — ")[0]} $${Math.round(d.salePrice)} (${d.discountPercent}% off)`;
+  });
 
   // Update cache
   cachedItems = headlines;
