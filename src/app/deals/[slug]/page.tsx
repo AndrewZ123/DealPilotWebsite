@@ -46,7 +46,7 @@ export default async function DealDetailPage({ params }: Props) {
   if (!deal) notFound();
 
   const savings = deal.originalPrice - deal.salePrice;
-  const isHotDeal = deal.discountPercent >= 40;
+  const isHotDeal = deal.discountPercent >= 80;
   const postedDate = new Date(deal.createdAt).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -138,13 +138,6 @@ export default async function DealDetailPage({ params }: Props) {
                 </svg>
                 Posted {postedDate}
               </span>
-              <span>·</span>
-              <span className="flex items-center gap-1.5">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                </svg>
-                {deal.clicks} {deal.clicks === 1 ? "person has" : "people have"} viewed this deal
-              </span>
             </div>
 
             {/* Description */}
@@ -185,6 +178,8 @@ export default async function DealDetailPage({ params }: Props) {
               {/* CTA */}
               <Link
                 href={`/go/${deal.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={`mt-6 flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-base font-bold text-white transition-all duration-200 ${
                   isHotDeal
                     ? "bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/25"

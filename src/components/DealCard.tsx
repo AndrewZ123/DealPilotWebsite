@@ -123,6 +123,8 @@ export default function DealCard({
         {/* CTA button — routes through redirect system */}
         <Link
           href={`/go/${slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white transition-all duration-200 ${
             isHotDeal
               ? "bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/25"

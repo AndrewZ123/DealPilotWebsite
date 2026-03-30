@@ -41,7 +41,7 @@ jobs:
             echo "🔄 Attempt $ATTEMPT of $MAX_RETRIES..."
 
             HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
-              --max-time 90 \
+              --max-time 300 \
               -X POST \
               -H "Authorization: Bearer $ADMIN_TOKEN" \
               -H "Content-Type: application/json" \
