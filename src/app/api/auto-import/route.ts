@@ -3,10 +3,12 @@
  *
  * POST /api/auto-import
  *
- * Orchestrates: RSS fetch → LLM rewrite → dedup → insert into Supabase
+ * Orchestrates: RSS fetch → dedup → LLM rewrite (parallel batches) → insert
  * Protected by ADMIN_TOKEN or API key (same auth as other admin routes).
  *
- * Called by GitHub Actions cron every 30 minutes.
+ * Called by GitHub Actions cron every 10 minutes.
+ * Processes deals in concurrent batches to maximise throughput within
+ * serverless function time limits.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,12 +17,150 @@ import { supabaseAdmin } from "@/lib/db";
 import { RSS_SOURCES } from "@/lib/rss-sources";
 import { fetchRSSFeed } from "@/lib/rss-parser";
 import { rewriteDeal } from "@/lib/llm-rewrite";
+import { revalidateAllDeals } from "@/lib/revalidation";
+
+// Allow up to 60 s on Vercel Pro (Hobby tier caps at 10 s regardless)
+export const maxDuration = 60;
 
 // Track whether sourceUrl column exists (avoid repeated failed queries)
 let sourceUrlColumnExists = true;
 
+/** Max deals to process per single API call (avoid timeouts) */
+const MAX_DEALS_PER_RUN = 10;
+
+/** How many LLM calls to fire in parallel */
+const CONCURRENCY = 3;
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+interface PendingDeal {
+  raw: Awaited<ReturnType<typeof fetchRSSFeed>>["deals"][number];
+  sourceName: string;
+}
+
+/** Check whether a raw RSS item is already in the database. */
+async function isDuplicate(
+  raw: PendingDeal["raw"]
+): Promise<boolean> {
+  if (sourceUrlColumnExists) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("deals")
+        .select("id")
+        .eq("sourceUrl", raw.link)
+        .maybeSingle();
+
+      if (error?.message?.includes("does not exist")) {
+        sourceUrlColumnExists = false;
+      } else if (data) {
+        return true;
+      }
+    } catch {
+      sourceUrlColumnExists = false;
+    }
+  }
+
+  // Fallback: title-based dedup
+  if (!sourceUrlColumnExists) {
+    const normalizedTitle = raw.title.toLowerCase().trim().slice(0, 100);
+    const { data } = await supabaseAdmin
+      .from("deals")
+      .select("id")
+      .ilike("title", `${normalizedTitle}%`)
+      .limit(1)
+      .maybeSingle();
+    if (data) return true;
+  }
+
+  return false;
+}
+
+/** Validate + normalise a drafted deal; return null if invalid. */
+function validateDraft(
+  deal: Record<string, unknown>
+): { valid: boolean; reason?: string } {
+  const orig = Number(deal.originalPrice) || 0;
+  const sale = Number(deal.salePrice) || 0;
+
+  if (!orig || !sale || orig <= 0 || sale <= 0) {
+    return { valid: false, reason: `No valid prices (original=$${orig}, sale=$${sale})` };
+  }
+
+  const VALID = ["Tech", "Home", "Fashion", "Toys", "Misc"];
+  const catMap: Record<string, string> = {
+    Electronics: "Tech", Audio: "Tech", Computers: "Tech", Phones: "Tech",
+    TV: "Tech", Gaming: "Toys", Kitchen: "Home", Outdoor: "Home",
+    Beauty: "Fashion", Fitness: "Home", Food: "Home", Travel: "Misc",
+  };
+  if (!VALID.includes(String(deal.category))) {
+    deal.category = catMap[String(deal.category)] || "Misc";
+  }
+
+  deal.discountPercent = Math.round(((orig - sale) / orig) * 100);
+
+  return { valid: true };
+}
+
+/** Insert a deal into Supabase. Returns true on success. */
+async function insertDeal(
+  deal: Record<string, unknown>,
+  raw: PendingDeal["raw"],
+  logs: string[]
+): Promise<boolean> {
+  const slugBase = String(deal.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+  const slugSuffix =
+    Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 5);
+  const slug = `${slugBase}-${slugSuffix}`;
+
+  const insertData: Record<string, unknown> = {
+    slug,
+    title: deal.title,
+    description: deal.description,
+    store: deal.store,
+    originalPrice: deal.originalPrice,
+    salePrice: deal.salePrice,
+    discountPercent: deal.discountPercent,
+    category: deal.category,
+    imageUrl: "",
+    finalUrl: deal.directUrl,
+    active: true,
+  };
+
+  if (sourceUrlColumnExists) insertData.sourceUrl = raw.link;
+
+  const { error: insertError } = await supabaseAdmin
+    .from("deals")
+    .insert(insertData);
+
+  if (insertError) {
+    if (
+      insertError.message?.includes("sourceUrl") &&
+      insertError.message?.includes("does not exist")
+    ) {
+      sourceUrlColumnExists = false;
+      delete insertData.sourceUrl;
+      const { error: retryError } = await supabaseAdmin
+        .from("deals")
+        .insert(insertData);
+      if (retryError) {
+        logs.push(`  ❌ Insert failed for "${String(deal.title).slice(0, 50)}": ${retryError.message}`);
+        return false;
+      }
+    } else {
+      logs.push(`  ❌ Insert failed for "${String(deal.title).slice(0, 50)}": ${insertError.message}`);
+      return false;
+    }
+  }
+  return true;
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
-  // ── Auth check ──
   const authorized = await isAuthorized(req);
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,156 +171,110 @@ export async function POST(req: NextRequest) {
   let skipped = 0;
   let failed = 0;
 
-  for (const source of RSS_SOURCES) {
-    logs.push(`📰 Fetching ${source.name}...`);
+  // ── Phase 1: Fetch all RSS feeds in parallel ──
+  logs.push("📡 Fetching RSS feeds in parallel...");
+  const feedResults = await Promise.allSettled(
+    RSS_SOURCES.map(async (source) => {
+      const result = await fetchRSSFeed(source);
+      return { source, ...result };
+    })
+  );
 
-    // ── Step 1: Fetch & parse RSS ──
-    const { deals: rawDeals, errors: fetchErrors } = await fetchRSSFeed(source);
+  // ── Phase 2: Collect & deduplicate all items ──
+  const pending: PendingDeal[] = [];
+
+  for (const result of feedResults) {
+    if (result.status === "rejected") {
+      logs.push(`⚠️ Feed fetch failed: ${result.reason}`);
+      continue;
+    }
+    const { source, deals: rawDeals, errors: fetchErrors } = result.value;
     if (fetchErrors.length > 0) {
       logs.push(...fetchErrors.map((e) => `  ⚠️ ${e}`));
     }
-    if (rawDeals.length === 0) {
-      logs.push(`  No items found.`);
-      continue;
-    }
-
-    logs.push(`  Found ${rawDeals.length} items`);
-
-    // ── Step 2: Process each item ──
+    logs.push(`📰 ${source.name}: ${rawDeals.length} items`);
     for (const raw of rawDeals) {
-      // Dedup: check if we already imported this deal
-      let isDuplicate = false;
+      pending.push({ raw, sourceName: source.name });
+    }
+  }
 
-      if (sourceUrlColumnExists) {
-        try {
-          const { data: existing, error: dedupError } = await supabaseAdmin
-            .from("deals")
-            .select("id")
-            .eq("sourceUrl", raw.link)
-            .maybeSingle();
+  logs.push(`\n🔍 Deduplicating ${pending.length} items...`);
 
-          if (dedupError) {
-            // Column likely doesn't exist — fall back to title-based dedup
-            if (dedupError.message?.includes("does not exist")) {
-              sourceUrlColumnExists = false;
-              logs.push(`  ℹ️ sourceUrl column not found, using title-based dedup`);
-            }
-          } else if (existing) {
-            skipped++;
-            isDuplicate = true;
-          }
-        } catch {
-          sourceUrlColumnExists = false;
-        }
+  // Dedup all at once (parallel)
+  const dedupResults = await Promise.all(
+    pending.map(async (p) => ({
+      pending: p,
+      isDup: await isDuplicate(p.raw),
+    }))
+  );
+
+  const newDeals = dedupResults.filter((r) => !r.isDup).map((r) => r.pending);
+  skipped = dedupResults.filter((r) => r.isDup).length;
+
+  logs.push(`  ${skipped} duplicates, ${newDeals.length} new candidates`);
+
+  // Cap at MAX_DEALS_PER_RUN
+  const toProcess = newDeals.slice(0, MAX_DEALS_PER_RUN);
+  if (newDeals.length > MAX_DEALS_PER_RUN) {
+    logs.push(`  ⚡ Processing first ${MAX_DEALS_PER_RUN} (out of ${newDeals.length}) to fit time budget`);
+  }
+
+  // ── Phase 3: LLM rewrite in parallel batches ──
+  logs.push(`\n🤖 Processing ${toProcess.length} deals (concurrency=${CONCURRENCY})...`);
+
+  for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
+    const batch = toProcess.slice(i, i + CONCURRENCY);
+
+    const results = await Promise.allSettled(
+      batch.map(async (item) => {
+        const { deal, error } = await rewriteDeal(item.raw);
+        return { item, deal, error };
+      })
+    );
+
+    for (const res of results) {
+      if (res.status === "rejected") {
+        failed++;
+        logs.push(`  ❌ LLM call failed: ${res.reason}`);
+        continue;
       }
 
-      // Fallback: title-based dedup
-      if (!isDuplicate && !sourceUrlColumnExists) {
-        const normalizedTitle = raw.title.toLowerCase().trim().slice(0, 100);
-        const { data: existingByTitle } = await supabaseAdmin
-          .from("deals")
-          .select("id")
-          .ilike("title", `${normalizedTitle}%`)
-          .limit(1)
-          .maybeSingle();
-
-        if (existingByTitle) {
-          skipped++;
-          isDuplicate = true;
-        }
-      }
-
-      if (isDuplicate) continue;
-
-      // ── Step 3: LLM rewrite + extract direct retailer URL ──
-      const { deal, error } = await rewriteDeal(raw);
+      const { item, deal, error } = res.value;
 
       if (!deal || error) {
         failed++;
-        logs.push(`  ❌ "${raw.title.slice(0, 50)}": ${error ?? "Unknown"}`);
+        logs.push(`  ❌ "${item.raw.title.slice(0, 50)}": ${error ?? "Unknown"}`);
         continue;
       }
 
-      // ── Step 3b: Validate price — skip deals with $0 prices ──
-      if (!deal.originalPrice || !deal.salePrice || deal.originalPrice <= 0 || deal.salePrice <= 0) {
+      const validation = validateDraft(deal as unknown as Record<string, unknown>);
+      if (!validation.valid) {
         failed++;
-        logs.push(`  ❌ "${raw.title.slice(0, 50)}": No valid prices (original=$${deal.originalPrice}, sale=$${deal.salePrice})`);
+        logs.push(`  ❌ "${item.raw.title.slice(0, 50)}": ${validation.reason}`);
         continue;
       }
 
-      // ── Step 3c: Validate category — map to canonical list ──
-      const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
-      if (!VALID_CATEGORIES.includes(deal.category)) {
-        // Try to map common variations
-        const catMap: Record<string, string> = {
-          "Electronics": "Tech", "Audio": "Tech", "Computers": "Tech", "Phones": "Tech",
-          "TV": "Tech", "Gaming": "Toys", "Kitchen": "Home", "Outdoor": "Home",
-          "Beauty": "Fashion", "Fitness": "Home", "Food": "Home", "Travel": "Misc",
-        };
-        deal.category = catMap[deal.category] || "Misc";
+      const ok = await insertDeal(
+        deal as unknown as Record<string, unknown>,
+        item.raw,
+        logs
+      );
+      if (ok) {
+        imported++;
+        logs.push(`  ✅ Imported: ${deal.title.slice(0, 60)} → ${deal.store}`);
+      } else {
+        failed++;
       }
+    }
+  }
 
-      // ── Step 4: Generate slug ──
-      const slugBase = deal.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 80);
-      const slugSuffix = Date.now().toString(36).slice(-4) +
-        Math.random().toString(36).slice(2, 5);
-      const slug = `${slugBase}-${slugSuffix}`;
-
-      // ── Step 5: Insert into Supabase ──
-      const insertData: Record<string, unknown> = {
-        slug,
-        title: deal.title,
-        description: deal.description,
-        store: deal.store,
-        originalPrice: deal.originalPrice,
-        salePrice: deal.salePrice,
-        discountPercent: deal.discountPercent,
-        category: deal.category,
-        imageUrl: "",
-        finalUrl: deal.directUrl,
-        active: true,
-      };
-
-      // Only include sourceUrl if the column exists
-      if (sourceUrlColumnExists) {
-        insertData.sourceUrl = raw.link;
-      }
-
-      const { error: insertError } = await supabaseAdmin
-        .from("deals")
-        .insert(insertData);
-
-      if (insertError) {
-        // If sourceUrl column is the issue, retry without it
-        if (
-          insertError.message?.includes("sourceUrl") &&
-          insertError.message?.includes("does not exist")
-        ) {
-          sourceUrlColumnExists = false;
-          delete insertData.sourceUrl;
-
-          const { error: retryError } = await supabaseAdmin
-            .from("deals")
-            .insert(insertData);
-
-          if (retryError) {
-            failed++;
-            logs.push(`  ❌ Insert failed for "${deal.title.slice(0, 50)}": ${retryError.message}`);
-            continue;
-          }
-        } else {
-          failed++;
-          logs.push(`  ❌ Insert failed for "${deal.title.slice(0, 50)}": ${insertError.message}`);
-          continue;
-        }
-      }
-
-      imported++;
-      logs.push(`  ✅ Imported: ${deal.title.slice(0, 60)} → ${deal.store}`);
+  // ── Phase 4: Revalidate public pages so new deals appear immediately ──
+  if (imported > 0) {
+    try {
+      revalidateAllDeals();
+      logs.push(`🔄 Cache purged for public pages`);
+    } catch {
+      logs.push(`⚠️ Cache revalidation failed (deals are saved though)`);
     }
   }
 
