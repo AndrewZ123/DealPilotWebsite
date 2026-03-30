@@ -10,7 +10,7 @@ const ZAI_MODEL = process.env.ZAI_MODEL || "glm-4.5";
 // In-memory cache
 let cachedItems: string[] | null = null;
 let cachedAt = 0;
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 3 * 60 * 60 * 1000; // 3 hours — matches the deal age window
 
 interface DealRow {
   title: string;
@@ -174,14 +174,30 @@ export async function GET() {
     return NextResponse.json({ items: cachedItems });
   }
 
+  // Only pick top deals from the last 3 hours, sorted by highest discount
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+
   const { data: deals, error } = await supabase
     .from("deals")
     .select("title, slug, store, originalPrice, salePrice, discountPercent, category")
     .eq("active", true)
-    .order("createdAt", { ascending: false })
+    .gte("createdAt", threeHoursAgo)
+    .order("discountPercent", { ascending: false })
     .limit(10);
 
-  if (error || !deals || deals.length === 0) {
+  // If fewer than 3 deals in the last 3 hours, fall back to best deals overall
+  let finalDeals = deals;
+  if ((!deals || deals.length < 3)) {
+    const { data: fallback } = await supabase
+      .from("deals")
+      .select("title, slug, store, originalPrice, salePrice, discountPercent, category")
+      .eq("active", true)
+      .order("discountPercent", { ascending: false })
+      .limit(10);
+    finalDeals = fallback;
+  }
+
+  if (error || !finalDeals || finalDeals.length === 0) {
     if (cachedItems) return NextResponse.json({ items: cachedItems });
     return NextResponse.json({
       items: ["🔥 DealPilot — Best deals updated every 15 minutes"],
@@ -189,10 +205,10 @@ export async function GET() {
   }
 
   // Try LLM first
-  const llmHeadlines = await generateLLMHeadlines(deals);
+  const llmHeadlines = await generateLLMHeadlines(finalDeals);
 
   // Fallback: distill titles with regex
-  const headlines = llmHeadlines || deals.map((d) => {
+  const headlines = llmHeadlines || finalDeals.map((d) => {
     const emoji = categoryEmoji(d.category);
     const clean = distillTitle(d.title);
     const price = `$${Math.round(d.salePrice)}`;

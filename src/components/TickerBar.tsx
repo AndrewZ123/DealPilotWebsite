@@ -34,8 +34,8 @@ export default function TickerBar() {
     setMounted(true);
     fetchTicker();
 
-    // Auto-refresh every 5 minutes to pick up new deals
-    const interval = setInterval(fetchTicker, 5 * 60 * 1000);
+    // Auto-refresh every 3 hours to match the ticker deal window
+    const interval = setInterval(fetchTicker, 3 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchTicker]);
 
