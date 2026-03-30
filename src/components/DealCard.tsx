@@ -32,33 +32,27 @@ export default function DealCard({
   const isNewDeal = Date.now() - new Date(createdAt).getTime() < 3 * 60 * 60 * 1000; // 3 hours
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:shadow-xl hover:border-brand-200 hover:-translate-y-1">
-      {/* Top badges */}
-      <div className="absolute left-3 top-3 z-10 flex gap-1.5">
-        {isHotDeal && (
-          <span className="animate-bounce-subtle inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white shadow-lg">
-            🔥 HOT
-          </span>
-        )}
-        {isNewDeal && (
-          <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white shadow-lg">
-            ✨ NEW
-          </span>
-        )}
-      </div>
-
-      {/* Discount badge — top right */}
-      <div className="absolute right-3 top-3 z-10">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500 text-white shadow-lg">
-          <span className="text-xs font-black leading-none">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:shadow-xl hover:border-brand-200 hover:-translate-y-1">
+      <div className="flex flex-1 flex-col p-5">
+        {/* Badges row */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isHotDeal && (
+            <span className="animate-bounce-subtle inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">
+              🔥 HOT
+            </span>
+          )}
+          {isNewDeal && (
+            <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white">
+              ✨ NEW
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-bold text-white">
             -{discountPercent}%
           </span>
         </div>
-      </div>
 
-      <div className="flex flex-1 flex-col p-5">
         {/* Category pill + store */}
-        <div className="flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <Link
             href={`/category/${category.toLowerCase()}`}
             className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
