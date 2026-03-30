@@ -1,14 +1,17 @@
-name: Auto-Import Deals
+name: Auto-Import Deals (Backup)
+
+# NOTE: Primary scheduling is now handled by:
+#   1. cron-job.org  (every 15 min — external, reliable)
+#   2. Supabase pg_cron (every 15 min — database-level, reliable)
+# This GitHub Action serves as a HOURLY safety net only.
+# GitHub Actions cron is unreliable for sub-hourly schedules.
 
 on:
   schedule:
-    # Primary: every 15 min at :00, :15, :30, :45
-    - cron: "*/15 * * * *"
-    # Backup offset: every 15 min at :07, :22, :37, :52
-    # If GitHub delays the primary, this one usually fires on time
-    - cron: "7,22,37,52 * * * *"
+    # Backup: every hour at :30
+    - cron: "30 * * * *"
   workflow_dispatch: # Allow manual trigger from GitHub UI
-  repository_dispatch: # Allow external trigger (e.g., cron-job.org)
+  repository_dispatch: # Allow external trigger
     types: [auto-import]
 
 permissions:
