@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { CATEGORIES } from "@/lib/categories";
 
 export default function Footer() {
@@ -9,10 +10,14 @@ export default function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="lg:col-span-1">
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white font-bold text-sm transition group-hover:bg-brand-500">
-                DP
-              </div>
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <Image
+                src="/logo.png"
+                alt="DealPilot"
+                width={36}
+                height={36}
+                className="rounded-lg transition group-hover:scale-105"
+              />
               <div>
                 <span className="text-lg font-bold text-white">Deal</span>
                 <span className="text-lg font-bold text-brand-400">Pilot</span>
