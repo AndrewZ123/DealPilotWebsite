@@ -31,7 +31,7 @@ jobs:
       - name: Trigger auto-import
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          SITE_URL: ${{ vars.SITE_URL || 'https://www.dealpilot.org' }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://dealpilot.org' }}
         run: |
           MAX_RETRIES=3
           RETRY_DELAY=5

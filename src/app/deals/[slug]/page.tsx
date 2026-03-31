@@ -1,12 +1,10 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import { notFound } from "next/navigation";
 
-// Always render fresh — ensures deals appear instantly after admin changes
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+// ISR: revalidate every 15 minutes (900 s)
+export const revalidate = 900;
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -33,8 +31,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function DealDetailPage({ params }: Props) {
-  unstable_noStore(); // Prevent any server-side caching of this page
-
   const { slug } = await params;
   const { data: deal } = await supabase
     .from("deals")
@@ -65,8 +61,36 @@ export default async function DealDetailPage({ params }: Props) {
 
   const related = relatedData ?? [];
 
+  // JSON-LD structured data for SEO
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Offer",
+    name: deal.title,
+    description: deal.description,
+    url: `https://dealpilot.org/deals/${deal.slug}`,
+    priceCurrency: "USD",
+    price: deal.salePrice.toFixed(2),
+    highPrice: deal.originalPrice.toFixed(2),
+    offeredBy: {
+      "@type": "Organization",
+      name: deal.store,
+    },
+    seller: {
+      "@type": "Organization",
+      name: "DealPilot",
+      url: "https://dealpilot.org",
+    },
+    availability: "https://schema.org/InStock",
+    validFrom: deal.createdAt,
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen">
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Breadcrumb */}
       <div className="bg-white border-b border-gray-100">
         <nav className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8 text-sm">

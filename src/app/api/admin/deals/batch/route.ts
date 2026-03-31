@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
 import { revalidateAllDeals } from "@/lib/revalidation";
+import { VALID_CATEGORIES } from "@/lib/utils";
 import slugify from "slugify";
-
-const VALID_CATEGORIES = ["Tech", "Home", "Fashion", "Toys", "Misc"];
 
 /**
  * POST /api/admin/deals/batch — Create multiple deals at once.

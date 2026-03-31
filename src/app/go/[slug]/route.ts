@@ -31,15 +31,8 @@ export async function GET(
     return NextResponse.redirect(new URL("/?not-found=1", req.url));
   }
 
-  // Increment click count (fire-and-forget)
-  void (async () => {
-    try {
-      await supabaseAdmin
-        .from("deals")
-        .update({ clicks: (deal.clicks || 0) + 1 })
-        .eq("id", deal.id);
-    } catch { /* non-critical */ }
-  })();
+  // Increment click count atomically via RPC (avoids race condition)
+  void supabaseAdmin.rpc("increment_clicks", { deal_id: deal.id });
 
   // Log click details for analytics (fire-and-forget)
   void (async () => {

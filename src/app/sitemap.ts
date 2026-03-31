@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 import { supabase } from "@/lib/db";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dealpilot.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dealpilot.org";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Static pages

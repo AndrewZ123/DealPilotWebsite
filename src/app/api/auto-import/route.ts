@@ -18,14 +18,10 @@ import { RSS_SOURCES } from "@/lib/rss-sources";
 import { fetchRSSFeed } from "@/lib/rss-parser";
 import { rewriteDeal } from "@/lib/llm-rewrite";
 import { revalidateAllDeals } from "@/lib/revalidation";
+import { VALID_CATEGORIES, sanitiseSearch } from "@/lib/utils";
 
 // Allow up to 60 s on Vercel Pro (Hobby tier caps at 10 s regardless)
 export const maxDuration = 60;
-
-// ── Concurrency lock: prevent overlapping runs ──
-// With multiple cron sources (cron-job.org, Supabase pg_cron, GitHub Actions),
-// two requests can arrive simultaneously. This in-memory lock prevents overlap.
-let isRunning = false;
 
 // Track whether sourceUrl column exists (avoid repeated failed queries)
 let sourceUrlColumnExists = true;
@@ -91,13 +87,12 @@ function validateDraft(
     return { valid: false, reason: `No valid prices (original=$${orig}, sale=$${sale})` };
   }
 
-  const VALID = ["Tech", "Home", "Fashion", "Toys", "Misc"];
   const catMap: Record<string, string> = {
     Electronics: "Tech", Audio: "Tech", Computers: "Tech", Phones: "Tech",
     TV: "Tech", Gaming: "Toys", Kitchen: "Home", Outdoor: "Home",
     Beauty: "Fashion", Fitness: "Home", Food: "Home", Travel: "Misc",
   };
-  if (!VALID.includes(String(deal.category))) {
+  if (!VALID_CATEGORIES.includes(String(deal.category))) {
     deal.category = catMap[String(deal.category)] || "Misc";
   }
 
@@ -218,9 +213,10 @@ export async function POST(req: NextRequest) {
 /** Shared import logic — auth is handled by the callers above */
 async function runImport(_req: NextRequest): Promise<NextResponse> {
 
-  // ── Concurrency guard ──
-  // Multiple cron sources can fire simultaneously; skip if already running.
-  if (isRunning) {
+  // ── Concurrency guard (Supabase distributed lock) ──
+  // Uses pg_try_advisory_lock via RPC so it works across serverless instances.
+  const { data: locked } = await supabaseAdmin.rpc("try_auto_import_lock");
+  if (!locked) {
     return NextResponse.json({
       success: true,
       imported: 0,
@@ -229,8 +225,6 @@ async function runImport(_req: NextRequest): Promise<NextResponse> {
       logs: ["⏭️ Skipped — another import is already in progress"],
     });
   }
-
-  isRunning = true;
 
   try {
 
@@ -359,7 +353,7 @@ async function runImport(_req: NextRequest): Promise<NextResponse> {
   });
 
   } finally {
-    // Always release the lock, even if an error occurred
-    isRunning = false;
+    // Always release the distributed lock, even if an error occurred
+    await supabaseAdmin.rpc("release_auto_import_lock");
   }
 }

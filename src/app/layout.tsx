@@ -18,6 +18,21 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "DealPilot",
+    images: [
+      {
+        url: "https://dealpilot.org/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "DealPilot — Curated Deals & Discounts",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DealPilot: Curated Deals & Discounts",
+    description:
+      "DealPilot tracks prices across top retailers to surface the best discounts on Tech, Home, Fashion, Toys, and more.",
+    images: ["https://dealpilot.org/logo.png"],
   },
   other: {
     "impact-site-verification": "dafb96f1-a3a0-44a8-85d1-9a6519c8d754",

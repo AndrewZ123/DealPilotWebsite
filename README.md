@@ -26,7 +26,7 @@ Visit `http://localhost:3000`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key (public) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (secret — server-side only) |
 | `ADMIN_TOKEN` | Secret token for admin routes |
-| `NEXT_PUBLIC_SITE_URL` | Public site URL (e.g. `https://dealpilot.com`) |
+| `NEXT_PUBLIC_SITE_URL` | Public site URL (e.g. `https://dealpilot.org`) |
 
 ## Database Setup
 

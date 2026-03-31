@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
 import { revalidateDeal, revalidateAllDeals } from "@/lib/revalidation";
+import { VALID_CATEGORIES } from "@/lib/utils";
 
 /**
  * GET /api/admin/deals/[id] — Get a single deal by ID.
@@ -76,10 +77,9 @@ export async function PUT(
   if (body.originalPrice !== undefined) data.originalPrice = Number(body.originalPrice);
   if (body.salePrice !== undefined) data.salePrice = Number(body.salePrice);
   if (body.category !== undefined) {
-    const validCategories = ["Tech", "Home", "Fashion", "Toys", "Misc"];
-    if (!validCategories.includes(String(body.category))) {
+    if (!VALID_CATEGORIES.includes(String(body.category))) {
       return NextResponse.json(
-        { success: false, error: `Invalid category "${body.category}".` },
+        { success: false, error: `Invalid category "${body.category}". Must be one of: ${VALID_CATEGORIES.join(", ")}` },
         { status: 400 }
       );
     }

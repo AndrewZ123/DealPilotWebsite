@@ -1,13 +1,11 @@
-import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
 import { CATEGORIES } from "@/lib/categories";
 import Link from "next/link";
 
-// Always render fresh — ensures deals appear instantly after admin changes
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+// ISR: revalidate every 15 minutes (900 s) — balances freshness with performance
+export const revalidate = 900;
 
 const PAGE_SIZE = 18;
 
@@ -16,8 +14,6 @@ export default async function Home({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  unstable_noStore(); // Prevent any server-side caching of this page
-
   const params = await searchParams;
   const page = Math.max(1, Number(params.page || "1"));
 
@@ -206,19 +202,22 @@ export default async function Home({
               Join thousands of smart shoppers. We'll send you the top deals
               every morning — no spam, just savings.
             </p>
-            <form className="mt-6 flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            {/* TODO: Wire up newsletter subscription to an email service (e.g. Resend, Mailchimp) */}
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
+                disabled
+                className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-400 cursor-not-allowed"
               />
               <button
-                type="submit"
-                className="rounded-xl bg-brand-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-brand-700/25 transition-all hover:bg-brand-800 hover:scale-105"
+                type="button"
+                disabled
+                className="rounded-xl bg-gray-300 px-6 py-3 text-sm font-bold text-gray-500 cursor-not-allowed"
               >
-                Subscribe Free
+                Coming Soon
               </button>
-            </form>
+            </div>
             <p className="mt-3 text-xs text-gray-400">
               Free forever. Unsubscribe anytime.{" "}
               <Link href="/disclosure" className="underline hover:text-gray-500">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isAuthorized } from "@/lib/auth";
 import { revalidateDeal } from "@/lib/revalidation";
+import { VALID_CATEGORIES, sanitiseSearch } from "@/lib/utils";
 import slugify from "slugify";
 
 /**
@@ -31,7 +32,10 @@ export async function GET(req: NextRequest) {
 
   if (category) query = query.eq("category", category);
   if (active !== null) query = query.eq("active", active === "true");
-  if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,store.ilike.%${search}%`);
+  if (search) {
+    const safe = sanitiseSearch(search);
+    query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%,store.ilike.%${safe}%`);
+  }
 
   const { data: deals, count, error } = await query;
 
@@ -101,10 +105,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const validCategories = ["Tech", "Home", "Fashion", "Toys", "Misc"];
-  if (!validCategories.includes(String(category))) {
+  if (!VALID_CATEGORIES.includes(String(category))) {
     return NextResponse.json(
-      { success: false, error: `Invalid category "${category}". Must be one of: ${validCategories.join(", ")}` },
+      { success: false, error: `Invalid category "${category}". Must be one of: ${VALID_CATEGORIES.join(", ")}` },
       { status: 400 }
     );
   }

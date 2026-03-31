@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import crypto from "crypto";
 import { supabaseAdmin } from "./db";
 
 /**
@@ -28,10 +29,16 @@ export async function authenticate(req: NextRequest): Promise<AuthResult> {
     return { authorized: false, isMaster: false };
   }
 
-  // Check 1: ADMIN_TOKEN (master admin)
+  // Check 1: ADMIN_TOKEN (master admin) — timing-safe comparison
   const adminToken = process.env.ADMIN_TOKEN;
-  if (adminToken && token === adminToken) {
-    return { authorized: true, isMaster: true };
+  if (adminToken && adminToken.length === token.length) {
+    try {
+      if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(adminToken))) {
+        return { authorized: true, isMaster: true };
+      }
+    } catch {
+      // lengths differ or invalid input — fall through
+    }
   }
 
   // Check 2: API key in database

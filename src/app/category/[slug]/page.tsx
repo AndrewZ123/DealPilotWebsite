@@ -1,14 +1,12 @@
 import { Metadata } from "next";
-import { unstable_noStore } from "next/cache";
 import { supabase } from "@/lib/db";
 import { getCategoryBySlug, CATEGORIES } from "@/lib/categories";
 import DealGrid from "@/components/DealGrid";
 import DisclosureBanner from "@/components/DisclosureBanner";
 import { notFound } from "next/navigation";
 
-// Always render fresh — ensures deals appear instantly after admin changes
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+// ISR: revalidate every 15 minutes (900 s)
+export const revalidate = 900;
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -23,8 +21,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoryPage({ params }: Props) {
-  unstable_noStore(); // Prevent any server-side caching of this page
-
   const { slug } = await params;
   const cat = getCategoryBySlug(slug);
   if (!cat) notFound();

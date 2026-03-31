@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/db";
 import { isMasterAdmin } from "@/lib/auth";
-import crypto from "crypto";
-
-function generateApiKey(): { key: string; prefix: string } {
-  const random = crypto.randomBytes(24).toString("hex");
-  const key = `dp_${random}`;
-  const prefix = key.slice(0, 8);
-  return { key, prefix };
-}
+import { generateApiKey } from "@/lib/utils";
 
 /**
  * PUT /api/admin/keys/[id] — Update an API key.
