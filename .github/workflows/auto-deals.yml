@@ -1,10 +1,12 @@
 name: Auto-Import Deals
 
-# Triple-redundant scheduling for reliability:
-#   1. Supabase pg_cron   (every 15 min — database-level, most reliable)
-#   2. cron-job.org       (every 15 min — external, free)
-#   3. GitHub Actions     (every 15 min — this file, backup)
-# The concurrency guard in /api/auto-import prevents overlapping runs.
+# Scheduling setup:
+#   Primary: cron-job.org (every 15 min — free, reliable external pings)
+#   Backup:  GitHub Actions (every 15 min — this file)
+#   Legacy:  Supabase pg_cron (still configured but not relied upon)
+#
+# The time-based lock in /api/auto-import prevents overlapping runs.
+# If a lock is held >5 min (from a crash/timeout), it auto-expires.
 
 on:
   schedule:
@@ -45,6 +47,7 @@ jobs:
               -X POST \
               -H "Authorization: Bearer $ADMIN_TOKEN" \
               -H "Content-Type: application/json" \
+              -H "x-worker-name: github-actions" \
               "$SITE_URL/api/auto-import")
 
             echo "HTTP Status: $HTTP_CODE"

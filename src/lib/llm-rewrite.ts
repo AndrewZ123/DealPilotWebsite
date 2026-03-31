@@ -22,22 +22,45 @@ export interface LLMDraftedDeal {
   category: string;
 }
 
-const SYSTEM_PROMPT = `You are DealPilot's deal curator AI. You receive raw RSS feed items from deal websites and must:
+const SYSTEM_PROMPT = `You are DealPilot's deal curator AI. You receive raw RSS feed items from deal websites and must output clean, structured deal data.
 
-1. FIND THE DIRECT RETAILER URL: The RSS item links to a deal site (like Slickdeals, DealNews). Inside the HTML content there is usually a direct link to the actual retailer (Amazon, Best Buy, Walmart, etc.). Extract that direct retailer URL. If you can't find one, construct a search URL for the retailer (e.g. "https://www.amazon.com/s?k=product+name"). NEVER return a link to slickdeals.net, dealnews.com, kinja.com, bradsdeals.com, or any other deal aggregator.
+RULES:
 
-2. REWRITE the title to be clear and engaging. Include the product name and key spec. No clickbait.
+TITLE (most important):
+- MAXIMUM 70 CHARACTERS. Never exceed this.
+- Product name + key spec only. Example: "Sony WH-1000XM5 Headphones" or "KitchenAid Stand Mixer 5-Qt"
+- Do NOT include prices, discounts, shipping info, or store names in the title.
+- Do NOT include phrases like "for Sale", "Discount", "Best Price", or "% off".
+- Remove brand slogans, marketing fluff, and DealNews/Slickdeals branding.
 
-3. WRITE a 2-sentence description that highlights the value proposition in a friendly tone.
+DESCRIPTION:
+- 1-2 short sentences about why this is a good deal. Friendly, factual tone.
 
-4. EXTRACT the store name (the actual retailer, not the deal site).
+PRICES (CRITICAL):
+- ONLY use prices explicitly stated in the source text. Do NOT estimate or guess.
+- originalPrice = the regular/list price BEFORE the discount.
+- salePrice = the current deal price AFTER the discount.
+- If you can only find the sale price but not the original, set originalPrice to 0 and salePrice to 0.
+- If NO price is mentioned at all, set both to 0 (the deal will be skipped).
+- NEVER make up prices or calculate them from percentage discounts alone.
 
-5. EXTRACT PRICES (CRITICAL — REQUIRED): You MUST extract both originalPrice and salePrice as positive numbers greater than 0. Look carefully at the title, description, and HTML content for price information ($XX.XX, $XX, XX% off, etc.). If the exact original price is not stated, estimate it based on the product type and discount mentioned. If NO price information is available at all, set originalPrice to 0 and salePrice to 0 — the deal will be skipped. Calculate discountPercent as: Math.round((1 - salePrice/originalPrice) * 100).
+STORE:
+- The actual retailer (Amazon, Best Buy, Walmart, etc.), NOT the deal site (Slickdeals, DealNews).
 
-6. ASSIGN a category — you MUST choose exactly one from this list (no others allowed): Tech, Home, Fashion, Toys, Misc
+DIRECT URL:
+- Find the direct retailer link from the HTML content. If not found, construct a search URL like "https://www.amazon.com/s?k=product+name".
+- NEVER return links to slickdeals.net, dealnews.com, kinja.com, bradsdeals.com, or any deal aggregator.
 
-You MUST respond with valid JSON only — no markdown, no explanation. Use this exact shape:
+CATEGORY — choose exactly one: Tech, Home, Fashion, Toys, Misc
+
+Respond with valid JSON only, no markdown or explanation:
 {"title":"...","description":"...","store":"...","directUrl":"...","originalPrice":99.99,"salePrice":49.99,"discountPercent":50,"category":"Tech"}`;
+
+/** Max allowed title length — longer titles are truncated */
+const MAX_TITLE_LENGTH = 70;
+
+/** Minimum realistic price in dollars — anything below is likely a parsing error */
+const MIN_REALISTIC_PRICE = 0.5;
 
 /**
  * Send a raw RSS deal to the LLM and get back a structured, rewritten deal.
@@ -113,17 +136,48 @@ Extract the direct retailer link, rewrite this deal, and return the JSON.`;
       };
     }
 
-    // Ensure prices are valid numbers
+    // ── Post-processing: enforce title constraints ──
+    // Strip any remaining price/discount patterns the LLM snuck into the title
+    parsed.title = parsed.title
+      .replace(/\s*[\$]\d+(\.\d{2})?(\s*-\s*\$?\d+(\.\d{2})?)?\s*/g, " ")  // $XX.XX or $XX - $YY
+      .replace(/\s*\d{1,3}%\s*off\s*/gi, " ")                                   // XX% off
+      .replace(/\s*[-–—]\s*\$?\d+(\.\d{2})?\s*/g, " ")                          // trailing dash + price
+      .replace(/\s*for\s*\$\d+/gi, "")                                            // "for $XX"
+      .replace(/\s*(plus|w\/|with)\s*free\s*shipping.*$/gi, "")                  // shipping info
+      .replace(/\s*\(?\d{1,3}%\s*off\)?\s*/gi, " ")                              // (XX% off)
+      .replace(/\s{2,}/g, " ")                                                    // collapse whitespace
+      .trim();
+
+    // Hard truncate at MAX_TITLE_LENGTH
+    if (parsed.title.length > MAX_TITLE_LENGTH) {
+      parsed.title = parsed.title.slice(0, MAX_TITLE_LENGTH).replace(/\s+\S*$/, "").trim();
+    }
+
+    // Reject if title ended up too short after cleaning
+    if (parsed.title.length < 5) {
+      return { deal: null, error: `Title too short after cleanup: "${parsed.title}"` };
+    }
+
+    // ── Post-processing: validate prices ──
     parsed.originalPrice = Number(parsed.originalPrice) || 0;
     parsed.salePrice = Number(parsed.salePrice) || 0;
     parsed.discountPercent = Number(parsed.discountPercent) || 0;
 
-    // Recalculate discount if missing or zero
-    if (
-      parsed.originalPrice > 0 &&
-      parsed.salePrice > 0 &&
-      parsed.discountPercent === 0
-    ) {
+    // Reject unrealistic prices (< $0.50 is almost certainly a parsing error)
+    if (parsed.salePrice > 0 && parsed.salePrice < MIN_REALISTIC_PRICE) {
+      return { deal: null, error: `Sale price unrealistically low: $${parsed.salePrice}` };
+    }
+    if (parsed.originalPrice > 0 && parsed.originalPrice < MIN_REALISTIC_PRICE) {
+      return { deal: null, error: `Original price unrealistically low: $${parsed.originalPrice}` };
+    }
+
+    // Reject if sale > original (nonsensical)
+    if (parsed.originalPrice > 0 && parsed.salePrice > parsed.originalPrice) {
+      return { deal: null, error: `Sale ($${parsed.salePrice}) > original ($${parsed.originalPrice})` };
+    }
+
+    // Recalculate discount from actual prices (don't trust LLM's math)
+    if (parsed.originalPrice > 0 && parsed.salePrice > 0) {
       parsed.discountPercent = Math.round(
         ((parsed.originalPrice - parsed.salePrice) / parsed.originalPrice) * 100
       );

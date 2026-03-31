@@ -214,8 +214,13 @@ export async function POST(req: NextRequest) {
 async function runImport(_req: NextRequest): Promise<NextResponse> {
 
   // ── Concurrency guard (Supabase distributed lock) ──
-  // Uses pg_try_advisory_lock via RPC so it works across serverless instances.
-  const { data: locked } = await supabaseAdmin.rpc("try_auto_import_lock");
+  // Uses a time-based lock table (auto_import_lock) that auto-expires stale locks.
+  // Worker name helps identify which scheduler triggered the run.
+  const workerName = _req.headers.get("x-worker-name") ||
+    (_req.method === "GET" ? "cron-job" : "github-actions");
+  const { data: locked } = await supabaseAdmin.rpc("try_auto_import_lock", {
+    worker_name: workerName,
+  });
   if (!locked) {
     return NextResponse.json({
       success: true,
