@@ -213,14 +213,37 @@ export async function POST(req: NextRequest) {
 /** Shared import logic — auth is handled by the callers above */
 async function runImport(_req: NextRequest): Promise<NextResponse> {
 
+  // ── Force-clear stuck lock if ?force=1 is passed ──
+  // Use this to recover from a permanently stuck lock (e.g. migration not applied)
+  const forceClear = _req.nextUrl.searchParams.get("force");
+  if (forceClear === "1" || forceClear === "true") {
+    await supabaseAdmin.rpc("release_auto_import_lock");
+  }
+
   // ── Concurrency guard (Supabase distributed lock) ──
   // Uses a time-based lock table (auto_import_lock) that auto-expires stale locks.
   // Worker name helps identify which scheduler triggered the run.
   const workerName = _req.headers.get("x-worker-name") ||
     (_req.method === "GET" ? "cron-job" : "github-actions");
-  const { data: locked } = await supabaseAdmin.rpc("try_auto_import_lock", {
-    worker_name: workerName,
-  });
+
+  let locked = false;
+  try {
+    const { data, error } = await supabaseAdmin.rpc("try_auto_import_lock", {
+      worker_name: workerName,
+    });
+    if (error) {
+      console.error("Lock acquisition error:", error.message);
+      // If the RPC function doesn't exist (migration not run), proceed anyway
+      locked = true;
+    } else {
+      locked = !!data;
+    }
+  } catch (err) {
+    console.error("Lock acquisition failed:", err);
+    // If we can't acquire the lock (e.g. table doesn't exist), proceed anyway
+    locked = true;
+  }
+
   if (!locked) {
     return NextResponse.json({
       success: true,
@@ -359,6 +382,10 @@ async function runImport(_req: NextRequest): Promise<NextResponse> {
 
   } finally {
     // Always release the distributed lock, even if an error occurred
-    await supabaseAdmin.rpc("release_auto_import_lock");
+    try {
+      await supabaseAdmin.rpc("release_auto_import_lock");
+    } catch {
+      // Lock table/function may not exist — nothing to release
+    }
   }
 }
